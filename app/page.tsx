@@ -3,35 +3,9 @@
 // Pantalla Home (landing). Portado de references/templates/home-about/home.jsx.
 // El router por hash (navigate({name,id})) se sustituye por useRouter() de next/navigation.
 
-import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { GAMES, type Game } from "@/lib/games";
-
-// IntersectionObserver del prototipo: al entrar una .reveal en viewport se le
-// añade .in y se deja de observar. Fallback: sin IntersectionObserver, se marcan
-// todas como visibles para no dejar secciones invisibles.
-function useReveal() {
-  useEffect(() => {
-    const els = document.querySelectorAll<HTMLElement>(".reveal");
-    if (typeof IntersectionObserver === "undefined") {
-      els.forEach((el) => el.classList.add("in"));
-      return;
-    }
-    const io = new IntersectionObserver(
-      (entries) => {
-        entries.forEach((e) => {
-          if (e.isIntersecting) {
-            e.target.classList.add("in");
-            io.unobserve(e.target);
-          }
-        });
-      },
-      { threshold: 0.12 },
-    );
-    els.forEach((el) => io.observe(el));
-    return () => io.disconnect();
-  }, []);
-}
+import { useReveal } from "@/components/use-reveal";
 
 function FloatingSilhouettes() {
   // Siluetas pixel decorativas de formas arcade clásicas.
