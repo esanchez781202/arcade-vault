@@ -1,0 +1,10 @@
+node_modules
+.next
+out
+build
+coverage
+.playwright-mcp
+.playwright-screenshots
+references
+package-lock.json
+*.tsbuildinfo
