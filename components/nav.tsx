@@ -13,9 +13,11 @@ export function Nav() {
   const { user, signOut } = useSession();
   const [open, setOpen] = useState(false);
 
+  const isHome = pathname === "/";
   // "Biblioteca" queda activa también en las rutas de detalle y reproductor.
-  const isLibrary = pathname === "/" || pathname.startsWith("/juego");
+  const isLibrary = pathname === "/biblioteca" || pathname.startsWith("/juego");
   const isSalon = pathname === "/salon";
+  const isAbout = pathname === "/acerca-de";
   const isAuth = pathname === "/acceso";
 
   const close = () => setOpen(false);
@@ -30,11 +32,17 @@ export function Nav() {
           </div>
         </Link>
         <div className="links">
-          <Link href="/" className={isLibrary ? "active" : ""}>
+          <Link href="/" className={isHome ? "active" : ""}>
+            Inicio
+          </Link>
+          <Link href="/biblioteca" className={isLibrary ? "active" : ""}>
             Biblioteca
           </Link>
           <Link href="/salon" className={isSalon ? "active" : ""}>
             Salón de la Fama
+          </Link>
+          <Link href="/acerca-de" className={isAbout ? "active" : ""}>
+            Acerca de
           </Link>
         </div>
         <div className="spacer" />
@@ -71,8 +79,11 @@ export function Nav() {
         >
           MENÚ
         </div>
+        <Link href="/" className={isHome ? "active" : ""} onClick={close}>
+          Inicio
+        </Link>
         <Link
-          href="/"
+          href="/biblioteca"
           className={isLibrary ? "active" : ""}
           onClick={close}
         >
@@ -84,6 +95,13 @@ export function Nav() {
           onClick={close}
         >
           Salón de la Fama
+        </Link>
+        <Link
+          href="/acerca-de"
+          className={isAbout ? "active" : ""}
+          onClick={close}
+        >
+          Acerca de
         </Link>
         <Link
           href="/acceso"
