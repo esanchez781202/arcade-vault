@@ -4,7 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 @AGENTS.md
 
-## Versión de Next.js
+No test runner configured yet.
+
+## Skills
+Usa siempre /frontend-design para diseñar las interfaces de usuario.
+
+## Architecture
 
 Fijado a `next@16.3.4` / `react@19.2.8`. Las APIs difieren de versiones anteriores
 de Next.js — consulta `node_modules/next/dist/docs/` (ver `01-app/`) antes de escribir

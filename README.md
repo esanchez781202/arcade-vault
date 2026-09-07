@@ -20,5 +20,3 @@ npx skills@latest add Klerith/fernando-skills
 - `npm run build` — production build
 - `npm start` — serve production build
 - `npm run lint` — ESLint (flat config, `eslint-config-next` core-web-vitals + typescript)
-
-No test runner configured yet.
