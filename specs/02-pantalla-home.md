@@ -1,6 +1,6 @@
 # SPEC 02 — Pantalla Home (landing) y reubicación de Biblioteca
 
-> **Estado:** Aprobada
+> **Estado:** Implementada
 > **Depende de:** SPEC 01
 > **Fecha:** 2026-09-07
 > **Objetivo:** Portar la landing `references/templates/home-about/home.jsx` al App Router como nueva raíz `/`, mover Biblioteca a `/biblioteca` y actualizar el nav con los enlaces "Inicio" y "Acerca de".
