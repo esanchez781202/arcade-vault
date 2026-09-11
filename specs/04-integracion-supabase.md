@@ -1,6 +1,6 @@
 # SPEC 04 — Integración de Supabase (solo cableado)
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** —
 > **Fecha:** 2026-09-11
 > **Objetivo:** Dejar los clientes de Supabase (navegador y servidor, en archivos de contexto separados) instalados, configurados por variables de entorno y verificables mediante una ruta de diagnóstico temporal, sin implementar ninguna funcionalidad de producto.
