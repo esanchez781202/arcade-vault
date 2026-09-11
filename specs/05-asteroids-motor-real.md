@@ -1,6 +1,6 @@
 # SPEC 05 — Motor real de ASTEROIDS
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** —
 > **Fecha:** 2026-09-11
 > **Objetivo:** Añadir una entrada nueva `asteroids` al catálogo `GAMES` y sustituir la simulación de puntuación falsa del reproductor por el motor real de Asteroids (portado desde `references/started-games/02-asteroids/game.js`) únicamente para ese juego, sincronizando su estado (puntuación, vidas, nivel, pausa, fin de partida) con el HUD React existente.
