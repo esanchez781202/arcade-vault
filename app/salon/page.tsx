@@ -36,6 +36,7 @@ export default function HallOfFame() {
 
   const game = games.find((g) => g.id === tab) ?? games[0];
   const hayScores = rows.length > 0;
+  const hayPodio = rows.length >= 3;
   const youRank = user && hayScores ? Math.floor(8 + (tab.length % 4)) : null;
   const youScore = user && hayScores ? rows[5]?.score - 2400 : null;
 
@@ -60,7 +61,7 @@ export default function HallOfFame() {
         ))}
       </div>
 
-      {hayScores && (
+      {hayPodio && (
         <div className="podium">
           <div className="podium-slot silver">
             <div className="rank-num">02</div>
