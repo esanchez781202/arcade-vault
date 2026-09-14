@@ -1,25 +1,19 @@
-"use client";
-
 // Pantalla Detalle. Portado de references/templates/detalle.jsx.
-// id se resuelve del params (Promise en Next 16) con React.use();
-// id inexistente → notFound().
+// Server Component: carga el juego y sus mejores puntuaciones desde Supabase;
+// id inexistente → notFound(). Los botones de navegación usan <Link>.
 
-import { use, useMemo } from "react";
-import { notFound, useRouter } from "next/navigation";
-import { GAMES, seededScores } from "@/lib/games";
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { obtenerJuego } from "@/lib/data/games";
+import { obtenerMejoresScores } from "@/lib/data/scores";
 
-export default function GameDetail({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = use(params);
-  const router = useRouter();
+export default async function GameDetail({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
 
-  const game = useMemo(() => GAMES.find((g) => g.id === id), [id]);
-  const scores = useMemo(() => seededScores(id.length * 17 + 3, 10), [id]);
-
+  const game = await obtenerJuego(id);
   if (!game) notFound();
+
+  const scores = await obtenerMejoresScores(id, 10);
 
   return (
     <div className="av-detail fade-in">
@@ -61,15 +55,12 @@ export default function GameDetail({
             </div>
           </div>
           <div className="detail-actions">
-            <button
-              className="btn xl pulse"
-              onClick={() => router.push(`/juego/${game.id}/jugar`)}
-            >
-              ▶  JUGAR AHORA
-            </button>
-            <button className="btn ghost lg" onClick={() => router.push("/biblioteca")}>
+            <Link className="btn xl pulse" href={`/juego/${game.id}/jugar`}>
+              ▶ JUGAR AHORA
+            </Link>
+            <Link className="btn ghost lg" href="/biblioteca">
               VOLVER AL VAULT
-            </button>
+            </Link>
           </div>
         </div>
       </div>
@@ -79,10 +70,9 @@ export default function GameDetail({
           <h3>MEJORES PUNTUACIONES</h3>
           {scores.map((r, i) => (
             <div
-              key={r.name}
+              key={r.rank}
               className={
-                "lb-row" +
-                (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
+                "lb-row" + (i === 0 ? " top1" : i === 1 ? " top2" : i === 2 ? " top3" : "")
               }
             >
               <div className="rk">#{String(r.rank).padStart(2, "0")}</div>
