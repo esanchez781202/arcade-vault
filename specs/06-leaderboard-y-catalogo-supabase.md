@@ -87,10 +87,11 @@ actions.ts`, `"use server"`) que llama a `guardarScore({ gameId, name, score })`
 
 - Autenticación real. `player_name` sigue siendo texto libre; no hay `user_id`, FK a
   `auth.users` ni restricción de quién puede insertar un score.
-- Cálculo de `plays` en vivo a partir de un conteo de partidas reales. Esa columna
-  de `games` se queda como valor fijo sembrado por la migración, igual que hoy.
-  (`best` sí pasó a calcularse en vivo desde `scores` en la ampliación, paso 11-12;
-  ver Decisiones.)
+- Contador exacto de partidas iniciadas (a diferencia de guardadas). `PARTIDAS` en
+  `/juego/[id]` sí pasó a calcularse en vivo en la ampliación (paso 13), pero como
+  proxy (`COUNT(scores)`), no como conteo exacto de partidas jugadas; ver
+  Decisiones. Un contador real de partidas iniciadas (independiente de si se
+  guarda score) queda pendiente para una spec futura.
 - Pantalla de administración del catálogo (crear/editar/borrar juegos desde la UI).
   `games` solo se modifica vía SQL/migraciones.
 - Paginación o "cargar más" en `/salon`. Sigue siendo top 12 fijo por juego.
@@ -269,6 +270,20 @@ game_id='asteroids'`), no el `41200` sembrado.
     y pasada como prop `mejoresGlobales` a `BibliotecaClient`, que la usa en el
     badge de cada tarjeta con fallback a `0`. Prueba manual: `/biblioteca` muestra
     el mismo "mejor global" que `/juego/asteroids` para el mismo juego.
+13. **`PARTIDAS` en vivo en `/juego/[id]`.** El usuario pidió que `PARTIDAS` también
+    dejara de ser el `game.plays` sembrado. Hoy no existe ningún contador real de
+    "partida iniciada" (solo se guarda un score al terminar, y no siempre); se
+    acordó con el usuario usar como proxy el número de scores guardados:
+    `PARTIDAS = COUNT(scores)` para ese juego (nueva función
+    `obtenerConteoScores(gameId): Promise<number>` en `lib/data/scores.ts`, con
+    `select(..., { count: "exact", head: true })`). No es un conteo exacto de
+    partidas jugadas (una partida sin guardar puntuación no cuenta), limitación
+    aceptada explícitamente. El resultado se formatea con el mismo estilo `"1.2K"`
+    que tenía `game.plays` (número tal cual por debajo de 1000). `games.plays`
+    queda sin uso en la UI tras este paso (se mantiene la columna, sin lectores).
+    Prueba manual: `/juego/asteroids` muestra en `PARTIDAS` el número real de filas
+    en `scores` para `asteroids` (verificable con `select count(*) from scores
+where game_id='asteroids'`), no el `"15.6K"` sembrado.
 
 ---
 
@@ -305,6 +320,8 @@ game_id='asteroids'`), no el `41200` sembrado.
 - [ ] (Ampliación) "Mejor global" en `/juego/asteroids` y "MEJOR PUNTUACIÓN" en la
       tarjeta de `/biblioteca` coinciden entre sí y con `MAX(scores.score)` real
       para `asteroids`, no con la columna `games.best` sembrada.
+- [ ] (Ampliación) `PARTIDAS` en `/juego/asteroids` coincide con `COUNT(scores)`
+      real para `asteroids`, no con la columna `games.plays` sembrada.
 
 ---
 
@@ -331,14 +348,16 @@ game_id='asteroids'`), no el `41200` sembrado.
 - **Sí:** `games` con `SELECT` público y sin ninguna policy de escritura desde el
   cliente. El catálogo es contenido editorial, no generado por usuarios; solo se
   modifica vía migración.
-- **No (revertida parcialmente en el paso 11-12):** originalmente `best`/`plays` de
-  `games` se quedaban como columnas fijas sembradas, sin calcularse en vivo desde
-  `scores` ("se pospone", ver más abajo). El usuario pidió revertirlo para `best`:
+- **No (revertida en los pasos 11-13):** originalmente `best`/`plays` de `games` se
+  quedaban como columnas fijas sembradas, sin calcularse en vivo desde `scores`
+  ("se pospone", ver más abajo). El usuario pidió revertirlo, primero para `best`:
   "Mejor global" en `/juego/[id]` y "MEJOR PUNTUACIÓN" en `/biblioteca` pasan a
   `MAX(scores.score)` real (fallback `0` sin scores), para que ambas pantallas
-  muestren el mismo dato real y no diverjan como columnas fijas vs. reales. `plays`
-  se queda fija — no se pidió cambiarla y no hay hoy un conteo de partidas jugadas
-  (solo de partidas guardadas), así que sería un proxy, no un conteo exacto.
+  muestren el mismo dato real y no diverjan como columnas fijas vs. reales. Después
+  también para `PARTIDAS` (paso 13): pasa a `COUNT(scores)` real, aceptando
+  explícitamente que es un proxy (partidas guardadas, no iniciadas) porque hoy no
+  existe un contador de partidas iniciadas. `games.plays`/`games.best` se quedan
+  en el esquema como columnas sembradas pero ya sin lectores en la UI.
 - **Sí:** `/salon` sin podio ni filas cuando un juego no tiene scores reales, en vez
   de rellenar con `seededScores()` como hoy. Mostrar datos simulados junto a reales
   sería engañoso una vez el leaderboard es real.
@@ -377,8 +396,9 @@ game_id='asteroids'`), no el `41200` sembrado.
 ## Lo que **no** entra en esta spec
 
 - Autenticación real ni `user_id` en `scores`.
-- Cálculo en vivo de `plays` desde partidas reales (`best` sí se calcula en vivo
-  desde SPEC 06, paso 11-12).
+- Contador exacto de partidas iniciadas (`best` y `PARTIDAS` sí se calculan en vivo
+  desde SPEC 06, pasos 11-13; `PARTIDAS` es un proxy vía `COUNT(scores)`, no un
+  conteo exacto de partidas jugadas).
 - Pantalla de administración del catálogo de juegos.
 - Paginación o "cargar más" en `/salon`.
 - Borrado o moderación de scores.

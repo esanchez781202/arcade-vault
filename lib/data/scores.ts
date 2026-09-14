@@ -58,6 +58,20 @@ export async function obtenerMejoresScoresPorJuego(
   return mejores;
 }
 
+export async function obtenerConteoScores(gameId: string): Promise<number> {
+  const supabase = await crearClienteSupabaseServidor();
+  const { count, error } = await supabase
+    .from("scores")
+    .select("*", { count: "exact", head: true })
+    .eq("game_id", gameId);
+
+  if (error) {
+    throw new Error(`Error al contar los scores de "${gameId}": ${error.message}`);
+  }
+
+  return count ?? 0;
+}
+
 export async function guardarScore(entry: {
   gameId: string;
   name: string;

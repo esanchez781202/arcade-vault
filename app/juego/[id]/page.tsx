@@ -5,12 +5,17 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { obtenerJuego } from "@/lib/data/games";
-import { obtenerMejoresScores } from "@/lib/data/scores";
+import { obtenerConteoScores, obtenerMejoresScores } from "@/lib/data/scores";
 
 function renderDificultad(difficulty: number): string {
   const llenas = "★ ".repeat(difficulty);
   const vacias = "☆ ".repeat(5 - difficulty);
   return (llenas + vacias).trim();
+}
+
+function formatearConteo(n: number): string {
+  if (n < 1000) return String(n);
+  return (n / 1000).toFixed(1).replace(".0", "") + "K";
 }
 
 export default async function GameDetail({ params }: { params: Promise<{ id: string }> }) {
@@ -23,6 +28,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   // scores está ordenado desc por score: el primero es el mejor global real,
   // exista o no entre los 10 mostrados en la mini-tabla.
   const mejorGlobal = scores[0]?.score ?? 0;
+  const partidas = await obtenerConteoScores(id);
 
   return (
     <div className="av-detail fade-in">
@@ -42,7 +48,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
           <div className="stat-strip">
             <div>
               <div className="l">Partidas</div>
-              <div className="v">{game.plays}</div>
+              <div className="v">{formatearConteo(partidas)}</div>
             </div>
             <div>
               <div className="l">Mejor global</div>
