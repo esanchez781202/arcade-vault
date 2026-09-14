@@ -7,6 +7,12 @@ import { notFound } from "next/navigation";
 import { obtenerJuego } from "@/lib/data/games";
 import { obtenerMejoresScores } from "@/lib/data/scores";
 
+function renderDificultad(difficulty: number): string {
+  const llenas = "★ ".repeat(difficulty);
+  const vacias = "☆ ".repeat(5 - difficulty);
+  return (llenas + vacias).trim();
+}
+
 export default async function GameDetail({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
 
@@ -14,13 +20,16 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
   if (!game) notFound();
 
   const scores = await obtenerMejoresScores(id, 10);
+  // scores está ordenado desc por score: el primero es el mejor global real,
+  // exista o no entre los 10 mostrados en la mini-tabla.
+  const mejorGlobal = scores[0]?.score ?? 0;
 
   return (
     <div className="av-detail fade-in">
       <div>
-        <div className="detail-cover">
+        <Link className="detail-cover" href={`/juego/${game.id}/jugar`}>
           <div className={"cover-bg " + game.cover} />
-        </div>
+        </Link>
         <div style={{ marginTop: 20 }} className="detail-info">
           <div className="detail-tags">
             <span>{game.cat}</span>
@@ -41,7 +50,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
                 className="v"
                 style={{ color: "var(--magenta)", textShadow: "0 0 6px rgba(255,0,110,0.5)" }}
               >
-                {game.best.toLocaleString("es-ES")}
+                {mejorGlobal.toLocaleString("es-ES")}
               </div>
             </div>
             <div>
@@ -50,7 +59,7 @@ export default async function GameDetail({ params }: { params: Promise<{ id: str
                 className="v"
                 style={{ color: "var(--yellow)", textShadow: "0 0 6px rgba(245,255,0,0.5)" }}
               >
-                ★ ★ ★ ☆ ☆
+                {renderDificultad(game.difficulty)}
               </div>
             </div>
           </div>

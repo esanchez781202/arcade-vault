@@ -8,7 +8,15 @@ import { useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { CATS, type Game } from "@/lib/games";
 
-function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => void }) {
+function GameCard({
+  game,
+  mejorGlobal,
+  onSelect,
+}: {
+  game: Game;
+  mejorGlobal: number;
+  onSelect: (game: Game) => void;
+}) {
   const tiltRef = useRef<HTMLDivElement>(null);
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -43,7 +51,7 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
         <div className="row">
           <div className="score-badge">
             <span>MEJOR PUNTUACIÓN</span>
-            <b>{game.best.toLocaleString("es-ES")}</b>
+            <b>{mejorGlobal.toLocaleString("es-ES")}</b>
           </div>
           <button
             className={
@@ -63,7 +71,13 @@ function GameCard({ game, onSelect }: { game: Game; onSelect: (game: Game) => vo
   );
 }
 
-export default function BibliotecaClient({ games }: { games: Game[] }) {
+export default function BibliotecaClient({
+  games,
+  mejoresGlobales,
+}: {
+  games: Game[];
+  mejoresGlobales: Record<string, number>;
+}) {
   const router = useRouter();
   const [q, setQ] = useState("");
   const [cat, setCat] = useState("TODOS");
@@ -109,7 +123,12 @@ export default function BibliotecaClient({ games }: { games: Game[] }) {
 
       <div className="av-grid">
         {filtered.map((g) => (
-          <GameCard key={g.id} game={g} onSelect={select} />
+          <GameCard
+            key={g.id}
+            game={g}
+            mejorGlobal={mejoresGlobales[g.id] ?? 0}
+            onSelect={select}
+          />
         ))}
         {filtered.length === 0 && (
           <div

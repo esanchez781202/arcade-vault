@@ -87,9 +87,10 @@ actions.ts`, `"use server"`) que llama a `guardarScore({ gameId, name, score })`
 
 - Autenticación real. `player_name` sigue siendo texto libre; no hay `user_id`, FK a
   `auth.users` ni restricción de quién puede insertar un score.
-- Cálculo de `best`/`plays` en vivo a partir de `MAX(scores.score)` o conteo de
-  partidas reales. Esas dos columnas de `games` se quedan como valores fijos
-  sembrados por la migración, igual que hoy.
+- Cálculo de `plays` en vivo a partir de un conteo de partidas reales. Esa columna
+  de `games` se queda como valor fijo sembrado por la migración, igual que hoy.
+  (`best` sí pasó a calcularse en vivo desde `scores` en la ampliación, paso 11-12;
+  ver Decisiones.)
 - Pantalla de administración del catálogo (crear/editar/borrar juegos desde la UI).
   `games` solo se modifica vía SQL/migraciones.
 - Paginación o "cargar más" en `/salon`. Sigue siendo top 12 fijo por juego.
@@ -117,7 +118,8 @@ create table public.games (
   cover text not null,
   color text not null check (color in ('cyan', 'magenta', 'yellow', 'green')),
   best integer not null,
-  plays text not null
+  plays text not null,
+  difficulty integer not null check (difficulty between 1 and 5) -- añadida en la ampliación (paso 9)
 );
 
 alter table public.games enable row level security;
@@ -157,6 +159,7 @@ export interface Game {
   color: "cyan" | "magenta" | "yellow" | "green";
   best: number;
   plays: string;
+  difficulty: number; // 1-5, añadido en la ampliación (paso 9)
 }
 
 export interface ScoreRow {
@@ -224,6 +227,49 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
    Si `next dev` reescribió el bloque `nextjs-agent-rules` de `AGENTS.md`, incluirlo
    en el commit.
 
+### Ampliación post-cierre (paso 9)
+
+Añadido durante la implementación, a petición del usuario, tras completar el paso 8:
+
+9. **Portada clicable en `/juego/[id]`.** La portada (`.detail-cover`) del juego
+   pasa a navegar a `/juego/[id]/jugar`, la misma ruta que el botón "JUGAR AHORA",
+   envolviéndola en el mismo `<Link>`. Prueba manual: click en la portada de
+   `/juego/asteroids` navega al reproductor.
+10. **`DIFICULTAD` real en `/juego/[id]`.** `PARTIDAS` (`game.plays`) y
+    `MEJOR GLOBAL` (`game.best`) ya se leían de `games` desde el paso 4; falta
+    `DIFICULTAD`, hoy fija en el JSX (`★ ★ ★ ☆ ☆`, 3 de 5). Se añade una columna
+    `difficulty` (`integer`, `check (difficulty between 1 and 5)`, `not null`) a
+    `games` vía nueva migración, sembrada con `3` para `asteroids` (mismo valor
+    visual que hoy). `Game.difficulty: number` en `lib/games.ts`;
+    `obtenerJuegos()`/`obtenerJuego()` la traen igual que el resto de columnas.
+    El render calcula `★` rellenas según `game.difficulty` en vez de un string fijo.
+    Prueba manual: `/juego/asteroids` sigue mostrando 3 estrellas rellenas (mismo
+    valor, ahora desde Supabase); cambiar la columna en Supabase y recargar cambia
+    la UI.
+11. **`MEJOR GLOBAL` en vivo en `/juego/[id]`.** El usuario reportó que "PARTIDAS y
+    MEJOR GLOBAL no se toman de la Base de datos"; en realidad ya se leían
+    (`game.plays`/`game.best`, paso 10), pero como columnas fijas sembradas, no
+    calculadas desde la actividad real — decisión explícita del paso original de
+    esta spec (ver "Fuera de alcance" y "Decisiones"). Se acordó con el usuario
+    revertir esa decisión solo para `MEJOR GLOBAL` de `/juego/[id]` (no para
+    `PARTIDAS`, que se queda fija): pasa a `MAX(scores.score)` real para ese
+    juego, derivado del primer elemento de `obtenerMejoresScores(id, 10)` (ya
+    viene ordenado desc, así que el primer elemento es el máximo real exista o no
+    entre los 10 mostrados), con fallback a `0` si el juego no tiene scores.
+    Prueba manual: `/juego/asteroids` muestra como "Mejor global" el máximo real
+    de `scores` (verificable con `select max(score) from scores where
+game_id='asteroids'`), no el `41200` sembrado.
+12. **`MEJOR PUNTUACIÓN` en vivo en `/biblioteca`.** La tarjeta de `/biblioteca`
+    mostraba el mismo `game.best` fijo en su badge "MEJOR PUNTUACIÓN"; para evitar
+    que dos pantallas muestren el mismo concepto con valores distintos (una en
+    vivo, otra fija), se migra también a datos reales. Nueva función
+    `obtenerMejoresScoresPorJuego(gameIds): Promise<Record<string, number>>` en
+    `lib/data/scores.ts` (una sola consulta a `scores` para todos los juegos, en
+    vez de N consultas) llamada desde `app/biblioteca/page.tsx` (Server Component)
+    y pasada como prop `mejoresGlobales` a `BibliotecaClient`, que la usa en el
+    badge de cada tarjeta con fallback a `0`. Prueba manual: `/biblioteca` muestra
+    el mismo "mejor global" que `/juego/asteroids` para el mismo juego.
+
 ---
 
 ## Criterios de aceptación
@@ -251,6 +297,14 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
 - [ ] Insertar un score vía el cliente de navegador (sin sesión) funciona (RLS
       pública de `scores` confirmada); intentar un `UPDATE`/`DELETE` sobre `scores`
       o un `INSERT`/`UPDATE`/`DELETE` sobre `games` desde el cliente falla por RLS.
+- [ ] (Ampliación) Click en la portada de `/juego/asteroids` navega a
+      `/juego/asteroids/jugar`, igual que "JUGAR AHORA".
+- [ ] (Ampliación) `games.difficulty` existe (`integer`, `check` 1-5, `not null`),
+      `asteroids` tiene `difficulty = 3`, y `/juego/asteroids` pinta las estrellas
+      de `DIFICULTAD` a partir de esa columna, no de un string fijo.
+- [ ] (Ampliación) "Mejor global" en `/juego/asteroids` y "MEJOR PUNTUACIÓN" en la
+      tarjeta de `/biblioteca` coinciden entre sí y con `MAX(scores.score)` real
+      para `asteroids`, no con la columna `games.best` sembrada.
 
 ---
 
@@ -277,9 +331,14 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
 - **Sí:** `games` con `SELECT` público y sin ninguna policy de escritura desde el
   cliente. El catálogo es contenido editorial, no generado por usuarios; solo se
   modifica vía migración.
-- **Sí:** `best`/`plays` de `games` se quedan como columnas fijas sembradas, no se
-  calculan en vivo desde `scores`. Calcularlas en vivo es una mejora de UX razonable
-  pero requiere decidir qué pasa mientras `scores` está casi vacío; se pospone.
+- **No (revertida parcialmente en el paso 11-12):** originalmente `best`/`plays` de
+  `games` se quedaban como columnas fijas sembradas, sin calcularse en vivo desde
+  `scores` ("se pospone", ver más abajo). El usuario pidió revertirlo para `best`:
+  "Mejor global" en `/juego/[id]` y "MEJOR PUNTUACIÓN" en `/biblioteca` pasan a
+  `MAX(scores.score)` real (fallback `0` sin scores), para que ambas pantallas
+  muestren el mismo dato real y no diverjan como columnas fijas vs. reales. `plays`
+  se queda fija — no se pidió cambiarla y no hay hoy un conteo de partidas jugadas
+  (solo de partidas guardadas), así que sería un proxy, no un conteo exacto.
 - **Sí:** `/salon` sin podio ni filas cuando un juego no tiene scores reales, en vez
   de rellenar con `seededScores()` como hoy. Mostrar datos simulados junto a reales
   sería engañoso una vez el leaderboard es real.
@@ -318,7 +377,8 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
 ## Lo que **no** entra en esta spec
 
 - Autenticación real ni `user_id` en `scores`.
-- Cálculo en vivo de `best`/`plays` desde scores reales.
+- Cálculo en vivo de `plays` desde partidas reales (`best` sí se calcula en vivo
+  desde SPEC 06, paso 11-12).
 - Pantalla de administración del catálogo de juegos.
 - Paginación o "cargar más" en `/salon`.
 - Borrado o moderación de scores.

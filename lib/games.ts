@@ -12,6 +12,7 @@ export interface Game {
   color: "cyan" | "magenta" | "yellow" | "green";
   best: number;
   plays: string; // texto ya formateado, p.ej. "12.4K"
+  difficulty: number; // 1-5, estrellas rellenas en la ficha de detalle
 }
 
 export const CATS: string[] = ["TODOS", "ARCADE", "PUZZLE", "SHOOTER", "VERSUS"];

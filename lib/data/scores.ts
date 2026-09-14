@@ -32,6 +32,32 @@ export async function obtenerMejoresScores(gameId: string, limite: number): Prom
   }));
 }
 
+export async function obtenerMejoresScoresPorJuego(
+  gameIds: string[],
+): Promise<Record<string, number>> {
+  if (gameIds.length === 0) return {};
+
+  const supabase = await crearClienteSupabaseServidor();
+  const { data, error } = await supabase
+    .from("scores")
+    .select("game_id, score")
+    .in("game_id", gameIds)
+    .order("score", { ascending: false });
+
+  if (error) {
+    throw new Error(`Error al obtener los mejores scores por juego: ${error.message}`);
+  }
+
+  const mejores: Record<string, number> = {};
+  for (const fila of data ?? []) {
+    const gameId = fila.game_id as string;
+    // data viene ordenado desc por score: el primer registro de cada game_id
+    // que aparece ya es su máximo.
+    if (!(gameId in mejores)) mejores[gameId] = fila.score as number;
+  }
+  return mejores;
+}
+
 export async function guardarScore(entry: {
   gameId: string;
   name: string;
