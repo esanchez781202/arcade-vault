@@ -7,6 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 No test runner configured yet.
 
 ## Skills
+
 Usa siempre /frontend-design para diseñar las interfaces de usuario.
 
 ## Architecture
@@ -44,9 +45,7 @@ origen `Klerith/fernando-skills`).
 
 Prototipo autónomo **HTML/React 18 + Babel standalone** de la app completa. Es la
 fuente de verdad visual/UX que hay que portar al App Router de Next.js. No está
-conectado al build. Los archivos están **borrados en el working tree pero presentes
-en git** — recupéralos con `git show HEAD:references/templates/<archivo>` o
-`git restore references/`.
+conectado al build. Los archivos están presentes tanto en el working tree como en git.
 
 - `Arcade Vault.html` — entrada; carga los `.jsx` en orden vía Babel standalone
 - `app.jsx` — raíz: routing por hash (`location.hash` = JSON de la ruta) + `localStorage`
