@@ -1,9 +1,9 @@
 # SPEC 07 — TETRIS: motor real y leaderboard
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 06
 > **Fecha:** 2026-09-14
-> **Objetivo:** Dar de alta `tetris` como segundo juego real del catálogo (motor portado desde `references/started-games/03-tetris/game.js`, con leaderboard en Supabase), e introducir el registro genérico de motores en el reproductor porque deja de haber un único juego real.
+> **Objetivo:** Dar de alta `tetris` como segundo juego real del catálogo (motor portado desde `references/started-games/03-tetris/game.js`, con leaderboard en Supabase), introducir el registro genérico de motores en el reproductor porque deja de haber un único juego real, y (ampliación post-cierre, pasos 7-11) portar el toggle claro/oscuro, el selector de skins, el nivel inicial y las stats de récord/combo que el prototipo incorporó después.
 
 ---
 
@@ -123,12 +123,15 @@ Contrato TypeScript entre el motor y el componente:
 ```ts
 // components/games/tetris/engine.ts
 export type TetrisGameState = "playing" | "gameover"; // sin "dead": Tetris no tiene vidas
+export type TetrisTheme = "dark" | "light"; // ampliación paso 7
+export type TetrisSkin = "retro" | "neon" | "pastel" | "pixel"; // ampliación paso 8
 
 export interface TetrisEngineState {
   score: number;
   lives: 0; // constante, sin uso real; se mantiene por compatibilidad con RealGameProps
   level: number;
   lines: number; // campo propio de Tetris, fuera del contrato base
+  maxCombo: number; // ampliación paso 10
   state: TetrisGameState;
 }
 
@@ -142,7 +145,7 @@ export interface TetrisInputState {
 
 export function createEngine(ctx: CanvasRenderingContext2D, nextCtx: CanvasRenderingContext2D) {
   /* ... */
-  return { update, draw, getState, forceGameOver };
+  return { update, draw, getState, forceGameOver, setTheme, setSkin, setStartLevel };
 }
 export type TetrisEngine = ReturnType<typeof createEngine>;
 ```
@@ -153,6 +156,8 @@ export interface TetrisGameHandle {
   pause(): void;
   resume(): void;
   forceGameOver(): void;
+  setTheme(theme: TetrisTheme): void; // ampliación paso 7, aplica en vivo
+  setSkin(skin: TetrisSkin): void; // ampliación paso 8, aplica en vivo
 }
 interface TetrisGameProps {
   onStateChange: (state: TetrisEngineState) => void;
@@ -160,12 +165,20 @@ interface TetrisGameProps {
 }
 ```
 
+El nivel inicial (ampliación paso 9) **no** se expone como método del `ref`: `TetrisGame` lo
+lee de `localStorage` (`tetris-start-level`) dentro de su propio efecto de montaje, junto con
+`tetris-theme`/`tetris-skin`, para que el ajuste no dependa del orden de efectos entre
+componentes (ver Decisiones y paso 11).
+
 ```ts
 // components/games/registry.ts
 export interface RealGameHandle {
   pause(): void;
   resume(): void;
   forceGameOver(): void;
+  /** Solo implementado por TetrisGame (ampliaciones de los pasos 7-8). */
+  setTheme?(theme: "dark" | "light"): void;
+  setSkin?(skin: "retro" | "neon" | "pastel" | "pixel"): void;
 }
 export interface RealGameProps {
   onStateChange: (state: { score: number; lives: number; level: number; state: string }) => void;
@@ -234,32 +247,103 @@ Cada paso deja `next dev` arrancando sin errores.
    Ejecutar `npx next build` y corregir errores. Si `next dev` reescribió el bloque
    `nextjs-agent-rules` de `AGENTS.md`, incluirlo en el commit.
 
+### Ampliación post-cierre (pasos 7-11)
+
+Añadida a petición del usuario tras completar el paso 6, al detectar que
+`references/started-games/03-tetris/` había sido reescrito con tres funcionalidades nuevas
+(`requirements.md`: menú de pausa completo, tabla de records local, selector de skins) que no
+estaban en el prototipo auditado en la Fase 2 del skill `/add-game` ni en el alcance original
+de esta spec. Las tres se implementaron, adaptadas a la arquitectura ya existente de Arcade
+Vault en vez de portarse literalmente:
+
+7. **Toggle claro/oscuro** (portado tal cual del prototipo, botón ☾/☀). Añadido primero, a
+   petición directa del usuario, antes de detectarse las otras tres funcionalidades.
+   - `engine.ts`: `TetrisTheme = "dark" | "light"`, `THEME_COLORS` con los mismos valores
+     `--canvas-bg`/`--grid-line` del prototipo, método `setTheme()`. Afecta tablero y canvas
+     "next"; las barras de letterbox se quedan negras siempre (marco CRT).
+   - `TetrisGame.tsx`: `setTheme` en el ref imperativo, redibuja al instante aunque esté en
+     pausa.
+   - `JugarClient.tsx`: botón ☾/☀ junto al panel lateral, persistido en `localStorage`
+     (`tetris-theme`, misma clave que el prototipo).
+8. **Selector de skins** (Retro/Neon/Pastel/Pixel Art, portado del bloque `SKINS` de
+   `game.js`, incluido el glow `shadowBlur` de Neon). Cada skin trae su propia paleta y su
+   propio `drawBlock`; `boardBg` fijo (si existe) ignora el tema claro/oscuro — la rejilla
+   sigue siempre el tema, igual que el original. `engine.ts` expone `setSkin()`; select en el
+   panel lateral de `JugarClient.tsx`, persistido en `localStorage` (`tetris-skin`).
+9. **Nivel inicial + controles**, adaptado del menú de pausa del prototipo al patrón de HUD
+   compartido de Arcade Vault en vez de un overlay propio (ver Decisiones): selector −/+
+   (1-15) en el panel lateral que aplica solo en la _próxima_ partida, persistido en
+   `localStorage` (`tetris-start-level`); botón "REINICIAR" nuevo en el HUD (`game.id ===
+"tetris"` únicamente) que reinicia sin pasar por game over; panel "VER CONTROLES" plegable.
+   `engine.ts`: `initGame(startLevel)` ahora acepta el nivel inicial (antes fijo en 1).
+10. **Récord y stats de combo/líneas**, adaptado de la tabla de records local del prototipo
+    (`localStorage`) a comparar contra el mejor score **real de Supabase** (ver Decisiones):
+    `app/juego/[id]/jugar/page.tsx` pasa `mejorGlobal` (vía `obtenerMejoresScores(id, 1)`) a
+    `JugarClient`; el modal de fin muestra "¡NUEVO RÉCORD!" cuando `score > mejorGlobal` y las
+    stats "Líneas: X · Combo máximo: Y". `engine.ts` añade tracking de combo (`maxCombo`,
+    portado de `clearLines()` del prototipo) y lo expone en `TetrisEngineState`.
+11. **Dos bugs encontrados y corregidos durante la verificación de los pasos 7-10:**
+    - **Condición de carrera con React Strict Mode (solo dev).** Un efecto en `JugarClient`
+      reaplicaba tema/skin/nivel sobre la instancia de motor recién creada en `TetrisGame`,
+      pero Strict Mode desmonta y remonta cada componente una vez más al montar (dev only) —
+      el efecto padre corría contra la instancia transitoria, y el ajuste se perdía en la
+      instancia final tras un REINICIAR. Solución: `TetrisGame` lee tema/skin/nivel
+      directamente de `localStorage` dentro de su propio efecto de montaje (`createEngine` +
+      aplicar ahí mismo), sin depender de que un efecto externo lo reaplique después.
+    - **Desincronización del estado de pausa.** `P`/`Escape` pausaban el motor dentro de
+      `TetrisGame` sin avisar a `JugarClient`, dejando el botón PAUSA/REANUDAR y el overlay
+      "EN PAUSA" (estado de `JugarClient`) desactualizados. Solución: `P`/`Escape` se maneja
+      centralmente en `JugarClient` (única fuente de verdad de `paused`); `TetrisGame` solo
+      bloquea inputs de juego mientras `pause()` (llamado por ref) esté activo.
+      Prueba manual de ambos: REINICIAR con skin/nivel distintos al default aplica
+      correctamente en la instancia final (verificado leyendo el píxel del canvas vía
+      `getImageData`); `Escape` sincroniza el botón/overlay de pausa igual que el botón HUD.
+
 ---
 
 ## Criterios de aceptación
 
-- [ ] `npx next build` termina sin errores ni warnings de TypeScript.
-- [ ] `supabase/migrations/` tiene una migración nueva que siembra `tetris` en `games` con
+- [x] `npx next build` termina sin errores ni warnings de TypeScript.
+- [x] `supabase/migrations/` tiene una migración nueva que siembra `tetris` en `games` con
       `difficulty` explícita; `get_advisors` no reporta RLS deshabilitada.
-- [ ] `/biblioteca` muestra una tarjeta nueva para `tetris`, con portada `.cover-tetris` propia
+- [x] `/biblioteca` muestra una tarjeta nueva para `tetris`, con portada `.cover-tetris` propia
       y datos correctos.
-- [ ] `components/games/tetris/engine.ts` no referencia `window`, `document` ni `canvas` a
+- [x] `components/games/tetris/engine.ts` no referencia `window`, `document` ni `canvas` a
       nivel de módulo.
-- [ ] `/juego/tetris/jugar` muestra el juego real jugable con teclado: tablero letterboxed
+- [x] `/juego/tetris/jugar` muestra el juego real jugable con teclado: tablero letterboxed
       dentro del marco CRT, canvas "next" con la pieza siguiente, HUD React con
       Puntuación/Nivel/Líneas reflejando el estado real del motor.
-- [ ] Rotación (↑/X con wall-kicks), movimiento lateral, soft drop y hard drop funcionan;
+- [x] Rotación (↑/X con wall-kicks), movimiento lateral, soft drop y hard drop funcionan;
       Espacio no hace scroll de la página mientras `state === "playing"`.
-- [ ] PAUSA (botón del HUD y tecla `P`) congela el canvas; REANUDAR retoma sin salto de
-      tiempo.
-- [ ] Una pieza que colisiona al generarse (game over) abre el modal de fin con el score real;
+- [x] PAUSA (botón del HUD y tecla `P`/`Esc`) congela el canvas; REANUDAR retoma sin salto de
+      tiempo. (Ampliación paso 11: la pausa por teclado se centralizó en `JugarClient` para no
+      desincronizar el botón/overlay del estado real del motor.)
+- [x] Una pieza que colisiona al generarse (game over) abre el modal de fin con el score real;
       `GUARDAR PUNTUACIÓN` inserta en `scores` vía la Server Action existente.
-- [ ] La fila guardada aparece en `/juego/tetris` (mini-tabla) y en `/salon` (tab `tetris`)
+- [x] La fila guardada aparece en `/juego/tetris` (mini-tabla) y en `/salon` (tab `tetris`)
       tras recargar.
-- [ ] `/juego/asteroids/jugar` se comporta exactamente igual que antes de esta spec, tras el
+- [x] `/juego/asteroids/jugar` se comporta exactamente igual que antes de esta spec, tras el
       refactor a `REGISTRO_MOTORES`.
-- [ ] `components/games/registry.ts` existe; `JugarClient.tsx` ya no tiene el booleano
+- [x] `components/games/registry.ts` existe; `JugarClient.tsx` ya no tiene el booleano
       `isAsteroids`.
+
+**Ampliación (pasos 7-11):**
+
+- [x] El botón ☾/☀ cambia el tema del tablero y del canvas "next" en vivo, persistido en
+      `localStorage` (`tetris-theme`); no afecta a ningún otro juego ni pantalla del sitio.
+- [x] El selector de skin (Retro/Neon/Pastel/Pixel Art) cambia el render del tablero en vivo
+      (incluido el glow de Neon), persistido en `localStorage` (`tetris-skin`).
+- [x] El selector "Nivel inicial" (−/+, 1-15) y el botón "REINICIAR" solo aparecen para
+      `game.id === "tetris"`; el nivel elegido se aplica en la partida siguiente (verificado:
+      HUD "NIVEL" refleja el valor elegido tras REINICIAR, no antes).
+- [x] "VER CONTROLES" muestra/oculta la lista de teclas sin afectar el estado del juego.
+- [x] El modal de fin muestra "¡NUEVO RÉCORD!" solo cuando `score > mejorGlobal` (dato real de
+      Supabase, no de `localStorage`) y siempre muestra "Líneas: X · Combo máximo: Y" para
+      `tetris`.
+- [x] Tras un REINICIAR, la instancia final del motor (post doble-montaje de Strict Mode en
+      dev) queda con el tema/skin/nivel elegidos — verificado leyendo el píxel del canvas.
+- [x] `Escape` (o `P`) alterna pausa y mantiene el botón PAUSA/REANUDAR y el overlay "EN PAUSA"
+      sincronizados con el estado real del motor.
 
 ---
 
@@ -278,9 +362,10 @@ Cada paso deja `next dev` arrancando sin errores.
 - **Sí:** campo `lines` como extensión propia de `TetrisEngineState`, mostrado en el HUD solo
   para `game.id === "tetris"`. Es un dato central de Tetris sin equivalente en el contrato
   base; forzarlo a encajar en `level`/`score` perdería información.
-- **Sí:** mantener la tecla `P` como atajo de pausa, además del botón "PAUSA" del HUD. Fiel al
-  prototipo original y no genera conflicto (ambos llaman a `togglePause()`/al mismo método del
-  `ref`).
+- **Sí:** mantener `P`/`Esc` como atajo de pausa, además del botón "PAUSA" del HUD. Fiel al
+  prototipo original. Manejado centralmente en `JugarClient` (no dentro de `TetrisGame`, ver
+  paso 11) para que el botón/overlay de pausa nunca se desincronicen de una pausa disparada
+  por teclado.
 - **Sí:** crear `.cover-tetris` nueva en vez de reutilizar una clase existente. Ninguna
   portada actual (`cover-rocas`, `cover-bricks`, etc.) representa temáticamente a Tetris.
 - **Sí:** introducir `components/games/registry.ts` en esta spec, refactorizando
@@ -288,6 +373,33 @@ Cada paso deja `next dev` arrancando sin errores.
   explícitamente pendiente para este momento.
 - **No:** hold piece, 7-bag randomizer, ni ninguna mejora sobre la generación puramente
   aleatoria del prototipo original. Fuera del alcance de portar el juego tal cual existe.
+
+**Decisiones de la ampliación (pasos 7-11):**
+
+- **Sí:** implementar las tres funcionalidades nuevas del prototipo reescrito (toggle,
+  skins, menú de pausa, records) en esta misma rama, a petición explícita del usuario, en vez
+  de abrir una spec nueva. Se adaptaron a la arquitectura existente en vez de portarse
+  literalmente (ver las tres decisiones siguientes).
+- **No:** portar el menú de pausa del prototipo (overlay propio con Reanudar/Reiniciar/Ver
+  controles/Nivel inicial) tal cual. Habría duplicado el botón PAUSA/REANUDAR y el flujo
+  "JUGAR DE NUEVO" que ya existen en el HUD compartido de `JugarClient` (con Asteroids). Se
+  adaptó a piezas sueltas dentro del patrón existente: nivel inicial y "ver controles" en el
+  panel lateral, un botón "REINICIAR" nuevo en el HUD, sin overlay propio.
+- **No:** portar la tabla de records local (`localStorage`) del prototipo. SPEC 06 retiró
+  explícitamente ese mecanismo a favor de Supabase como única fuente de verdad del
+  leaderboard; una tabla de records paralela en `localStorage` lo habría contradicho y
+  duplicado lo que ya muestran `/juego/tetris` y `/salon`. Se adaptó a comparar el score final
+  contra `mejorGlobal` (Supabase, vía `obtenerMejoresScores`) para el badge "¡NUEVO RÉCORD!",
+  y a mostrar líneas/combo máximo como stats de sesión en el modal de fin (sin persistirlos en
+  `scores`, que no tiene esas columnas — no se modificó el esquema).
+- **Sí:** que `TetrisGame` lea tema/skin/nivel inicial de `localStorage` en su propio efecto de
+  montaje, en vez de que `JugarClient` se los reaplique con un efecto externo tras cada
+  (re)montaje. La segunda forma sufría una condición de carrera real con el doble-montaje de
+  Strict Mode en desarrollo (ver paso 11): el efecto externo solo corre una vez y podía
+  aplicar los ajustes sobre la instancia de motor transitoria que Strict Mode descarta.
+- **Sí:** centralizar el manejo de `P`/`Esc` en `JugarClient` en vez de dentro de `TetrisGame`.
+  Evita la desincronización real detectada en el paso 11 entre el estado interno del motor y
+  el botón/overlay de pausa del HUD, que vive en `JugarClient`.
 
 ---
 
@@ -311,6 +423,10 @@ Cada paso deja `next dev` arrancando sin errores.
 - Pantalla de administración del catálogo.
 - Sonido/música.
 - Hold piece, 7-bag randomizer o cualquier mejora sobre el prototipo original.
+- Tabla de records en `localStorage` tal cual la trae el prototipo reescrito (ver Decisiones
+  de la ampliación) — se adaptó a comparar contra el mejor score real de Supabase.
+- Nuevas columnas en `scores` (`lines`/`combo`) para persistir esas stats por partida guardada
+  — quedan solo como stats de sesión en el modal de fin, sin cambio de esquema.
 - Tests automatizados.
 
 Cada uno de esos, si llega, va en su propia spec.

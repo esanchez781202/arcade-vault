@@ -1,59 +1,138 @@
 "use client";
 
 // Parte interactiva del Reproductor. Portado de references/templates/reproductor.jsx.
-// Simulación visual: puntuación auto-incremental, pausa, nivel por umbral,
-// marco CRT y modal de fin. GUARDAR PUNTUACIÓN escribe en Supabase vía
-// guardarScoreAction (Server Action), ver actions.ts.
+// Para juegos sin motor real: simulación visual (puntuación auto-incremental,
+// nivel por umbral). Para juegos registrados en REGISTRO_MOTORES (asteroids,
+// tetris), el motor real reporta su propio estado vía onStateChange y el
+// marco CRT monta su componente en vez del bloque `.game-arena` simulado.
+// GUARDAR PUNTUACIÓN escribe en Supabase vía guardarScoreAction (Server
+// Action), ver actions.ts.
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import type { Game } from "@/lib/games";
 import { useSession } from "@/components/session-provider";
-import AsteroidsGame, {
-  type AsteroidsGameHandle,
-  type AsteroidsEngineState,
-} from "@/components/games/asteroids/AsteroidsGame";
+import {
+  REGISTRO_MOTORES,
+  type RealGameHandle,
+  type RealGameState,
+} from "@/components/games/registry";
 import { guardarScoreAction } from "./actions";
 
-export default function JugarClient({ game }: { game: Game }) {
+interface RealGameStateWithLines extends RealGameState {
+  lines?: number;
+  maxCombo?: number;
+}
+
+const TETRIS_SKINS: { value: "retro" | "neon" | "pastel" | "pixel"; label: string }[] = [
+  { value: "retro", label: "Retro" },
+  { value: "neon", label: "Neon" },
+  { value: "pastel", label: "Pastel" },
+  { value: "pixel", label: "Pixel Art" },
+];
+
+export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGlobal: number }) {
   const router = useRouter();
   const { user } = useSession();
-  const isAsteroids = game.id === "asteroids";
+  const MotorJuego = REGISTRO_MOTORES[game.id];
 
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
   const [level, setLevel] = useState(1);
+  const [lines, setLines] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
   const [paused, setPaused] = useState(false);
   const [over, setOver] = useState(false);
   const [name, setName] = useState(user ? user.name : "INVITADO");
   const [saved, setSaved] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [asteroidsKey, setAsteroidsKey] = useState(0);
-  const asteroidsRef = useRef<AsteroidsGameHandle>(null);
+  const [gameKey, setGameKey] = useState(0);
+  const [mejor, setMejor] = useState(mejorGlobal);
+  const gameRef = useRef<RealGameHandle>(null);
 
-  // Solo para juegos simulados: asteroids reporta su propio estado real vía onStateChange.
+  // Ampliaciones portadas de references/started-games/03-tetris (solo
+  // afectan a la pantalla de Tetris, no al resto del sitio):
+  // toggle claro/oscuro, selector de skin y nivel inicial. Arrancan en su
+  // valor por defecto (igual en servidor y cliente) y leen la preferencia
+  // guardada tras montar, para no desincronizar el HTML de servidor/cliente.
+  const [tetrisTheme, setTetrisTheme] = useState<"dark" | "light">("dark");
+  const [tetrisSkin, setTetrisSkin] = useState<"retro" | "neon" | "pastel" | "pixel">("retro");
+  const [tetrisStartLevel, setTetrisStartLevel] = useState(1);
+  const [showControls, setShowControls] = useState(false);
+
   useEffect(() => {
-    if (isAsteroids) return;
+    if (game.id !== "tetris") return;
+    if (window.localStorage.getItem("tetris-theme") === "light") setTetrisTheme("light");
+    const savedSkin = window.localStorage.getItem("tetris-skin");
+    if (savedSkin === "neon" || savedSkin === "pastel" || savedSkin === "pixel") {
+      setTetrisSkin(savedSkin);
+    }
+    const savedLevel = parseInt(window.localStorage.getItem("tetris-start-level") ?? "1", 10);
+    if (Number.isFinite(savedLevel)) setTetrisStartLevel(Math.min(15, Math.max(1, savedLevel)));
+  }, [game.id]);
+
+  // Solo para juegos simulados: los motores reales reportan su propio estado
+  // real vía onStateChange (ver handleGameStateChange).
+  useEffect(() => {
+    if (MotorJuego) return;
     if (over || paused) return;
     const t = setInterval(() => setScore((s) => s + Math.floor(10 + Math.random() * 90)), 220);
     return () => clearInterval(t);
-  }, [over, paused, isAsteroids]);
+  }, [over, paused, MotorJuego]);
 
   useEffect(() => {
-    if (isAsteroids) return;
+    if (MotorJuego) return;
     if (score > 0 && score % 2500 < 100) setLevel((l) => l + 1);
-  }, [score, isAsteroids]);
+  }, [score, MotorJuego]);
 
-  const handleAsteroidsStateChange = useCallback((s: AsteroidsEngineState) => {
+  // Aplica cambios en vivo de tema/skin mientras el motor ya está montado
+  // (botón/selector). El nivel inicial no se aplica en vivo: `TetrisGame`
+  // lo lee de `localStorage` al (re)montar (ver readInitialSettings en
+  // TetrisGame.tsx) — evita depender del orden de efectos entre componentes,
+  // que con Strict Mode en desarrollo podía perderse en un remontaje.
+  useEffect(() => {
+    if (game.id !== "tetris") return;
+    gameRef.current?.setTheme?.(tetrisTheme);
+  }, [game.id, tetrisTheme]);
+
+  useEffect(() => {
+    if (game.id !== "tetris") return;
+    gameRef.current?.setSkin?.(tetrisSkin);
+  }, [game.id, tetrisSkin]);
+
+  const toggleTetrisTheme = () => {
+    setTetrisTheme((t) => {
+      const next = t === "light" ? "dark" : "light";
+      window.localStorage.setItem("tetris-theme", next);
+      return next;
+    });
+  };
+
+  const changeTetrisSkin = (skin: "retro" | "neon" | "pastel" | "pixel") => {
+    setTetrisSkin(skin);
+    window.localStorage.setItem("tetris-skin", skin);
+  };
+
+  const changeTetrisStartLevel = (delta: number) => {
+    setTetrisStartLevel((l) => {
+      const next = Math.min(15, Math.max(1, l + delta));
+      window.localStorage.setItem("tetris-start-level", String(next));
+      return next;
+    });
+  };
+
+  const handleGameStateChange = useCallback((s: RealGameStateWithLines) => {
     setScore(s.score);
     setLives(s.lives);
     setLevel(s.level);
+    if (typeof s.lines === "number") setLines(s.lines);
+    if (typeof s.maxCombo === "number") setMaxCombo(s.maxCombo);
     if (s.state === "gameover") setOver(true);
   }, []);
 
   const endGame = () => {
-    if (isAsteroids) {
-      asteroidsRef.current?.forceGameOver();
+    if (MotorJuego) {
+      gameRef.current?.forceGameOver();
     } else {
       setOver(true);
     }
@@ -61,9 +140,9 @@ export default function JugarClient({ game }: { game: Game }) {
   const togglePause = () => {
     setPaused((p) => {
       const next = !p;
-      if (isAsteroids) {
-        if (next) asteroidsRef.current?.pause();
-        else asteroidsRef.current?.resume();
+      if (MotorJuego) {
+        if (next) gameRef.current?.pause();
+        else gameRef.current?.resume();
       }
       return next;
     });
@@ -72,17 +151,36 @@ export default function JugarClient({ game }: { game: Game }) {
     setScore(0);
     setLevel(1);
     setLives(3);
+    setLines(0);
+    setMaxCombo(0);
     setPaused(false);
     setOver(false);
     setSaved(false);
-    if (isAsteroids) setAsteroidsKey((k) => k + 1);
+    if (MotorJuego) setGameKey((k) => k + 1);
   };
+
+  // Tecla P/Esc para pausar en Tetris (portado del prototipo): se maneja
+  // aquí, no dentro de TetrisGame, para que el botón PAUSA/REANUDAR y el
+  // overlay "EN PAUSA" (estado de JugarClient) nunca se desincronicen de
+  // una pausa disparada por teclado.
+  useEffect(() => {
+    if (game.id !== "tetris") return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (over) return;
+      if (e.code === "KeyP" || e.code === "Escape") togglePause();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [game.id, over, togglePause]);
+
+  const esNuevoRecord = game.id === "tetris" && over && score > 0 && score > mejor;
 
   const guardarPuntuacion = async () => {
     setSaving(true);
     try {
       await guardarScoreAction({ gameId: game.id, name, score });
       setSaved(true);
+      setMejor((m) => Math.max(m, score));
     } finally {
       setSaving(false);
     }
@@ -110,11 +208,22 @@ export default function JugarClient({ game }: { game: Game }) {
             <div className="l">Nivel</div>
             <div className="v">{String(level).padStart(2, "0")}</div>
           </div>
+          {game.id === "tetris" && (
+            <div className="hud-stat">
+              <div className="l">Líneas</div>
+              <div className="v">{lines}</div>
+            </div>
+          )}
         </div>
         <div className="hud-actions">
           <button className="btn yellow" onClick={togglePause}>
             {paused ? "REANUDAR" : "PAUSA"}
           </button>
+          {game.id === "tetris" && (
+            <button className="btn ghost" onClick={restart}>
+              REINICIAR
+            </button>
+          )}
           <button className="btn magenta" onClick={endGame}>
             FIN
           </button>
@@ -124,57 +233,187 @@ export default function JugarClient({ game }: { game: Game }) {
         </div>
       </div>
 
-      <div className="crt">
-        <div className="crt-screen">
-          {isAsteroids ? (
-            <AsteroidsGame
-              key={asteroidsKey}
-              ref={asteroidsRef}
-              onStateChange={handleAsteroidsStateChange}
-            />
-          ) : (
-            <div className="game-arena">
-              <div className="grid-floor" />
-              <div className="enemy e1" />
-              <div className="enemy e2" />
-              <div className="enemy e3" />
-              <div className="player-ship" />
-            </div>
-          )}
-          {paused && (
-            <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
-              <div>
-                <div className="pixel neon-yellow" style={{ fontSize: 22 }}>
-                  EN PAUSA
+      <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div className="crt" style={{ flex: "1 1 480px", minWidth: 0 }}>
+          <div className="crt-screen">
+            {MotorJuego ? (
+              <MotorJuego key={gameKey} ref={gameRef} onStateChange={handleGameStateChange} />
+            ) : (
+              <div className="game-arena">
+                <div className="grid-floor" />
+                <div className="enemy e1" />
+                <div className="enemy e2" />
+                <div className="enemy e3" />
+                <div className="player-ship" />
+              </div>
+            )}
+            {paused && (
+              <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
+                <div>
+                  <div className="pixel neon-yellow" style={{ fontSize: 22 }}>
+                    EN PAUSA
+                  </div>
+                  <div
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--ink-dim)",
+                      marginTop: 10,
+                      letterSpacing: "0.16em",
+                    }}
+                  >
+                    PULSA REANUDAR PARA CONTINUAR
+                  </div>
                 </div>
-                <div
+              </div>
+            )}
+          </div>
+          <div className="crt-bottom">
+            <span className="led">SEÑAL OK</span>
+            <span>{game.title} · CRT-83 · 60 HZ</span>
+            <span>CARGA · 1MB</span>
+          </div>
+        </div>
+
+        {game.id === "tetris" && (
+          <div style={{ flex: "0 0 200px", display: "flex", flexDirection: "column", gap: 16 }}>
+            <button
+              className="btn ghost"
+              style={{ fontSize: 10, padding: "6px 10px" }}
+              onClick={toggleTetrisTheme}
+            >
+              {tetrisTheme === "light" ? "☀ CLARO" : "☾ OSCURO"}
+            </button>
+
+            <div className="hud-stat">
+              <div className="l">Siguiente</div>
+              <div
+                id="tetris-next-slot"
+                style={{
+                  width: 120,
+                  height: 120,
+                  background: "#000",
+                  border: "1px solid var(--ink-faint)",
+                  borderRadius: 8,
+                  marginTop: 4,
+                }}
+              />
+            </div>
+
+            <div className="hud-stat">
+              <div className="l">Skin</div>
+              <select
+                value={tetrisSkin}
+                onChange={(e) => changeTetrisSkin(e.target.value as typeof tetrisSkin)}
+                style={{
+                  background: "var(--panel, #0a0a12)",
+                  color: "var(--ink)",
+                  border: "1px solid var(--ink-faint)",
+                  borderRadius: 6,
+                  padding: "6px 8px",
+                  fontSize: 12,
+                }}
+              >
+                {TETRIS_SKINS.map((s) => (
+                  <option key={s.value} value={s.value}>
+                    {s.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="hud-stat">
+              <div className="l">Nivel inicial</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button
+                  className="btn ghost"
+                  style={{ padding: "2px 10px", fontSize: 14 }}
+                  onClick={() => changeTetrisStartLevel(-1)}
+                  disabled={tetrisStartLevel <= 1}
+                >
+                  −
+                </button>
+                <span className="v" style={{ minWidth: 20, textAlign: "center" }}>
+                  {tetrisStartLevel}
+                </span>
+                <button
+                  className="btn ghost"
+                  style={{ padding: "2px 10px", fontSize: 14 }}
+                  onClick={() => changeTetrisStartLevel(1)}
+                  disabled={tetrisStartLevel >= 15}
+                >
+                  +
+                </button>
+              </div>
+              <div
+                className="mono"
+                style={{ fontSize: 9, color: "var(--ink-faint)", letterSpacing: "0.05em" }}
+              >
+                Aplica en la próxima partida
+              </div>
+            </div>
+
+            <div className="hud-stat">
+              <button
+                className="btn ghost"
+                style={{ fontSize: 10, padding: "6px 10px" }}
+                onClick={() => setShowControls((v) => !v)}
+              >
+                {showControls ? "OCULTAR CONTROLES" : "VER CONTROLES"}
+              </button>
+              {showControls && (
+                <ul
                   className="mono"
                   style={{
                     fontSize: 11,
                     color: "var(--ink-dim)",
-                    marginTop: 10,
-                    letterSpacing: "0.16em",
+                    listStyle: "none",
+                    padding: 0,
+                    marginTop: 8,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 4,
                   }}
                 >
-                  PULSA REANUDAR PARA CONTINUAR
-                </div>
-              </div>
+                  <li>← → mover</li>
+                  <li>↑ / X rotar</li>
+                  <li>↓ caída suave</li>
+                  <li>Espacio caída total</li>
+                  <li>P / Esc pausa</li>
+                </ul>
+              )}
             </div>
-          )}
-        </div>
-        <div className="crt-bottom">
-          <span className="led">SEÑAL OK</span>
-          <span>{game.title} · CRT-83 · 60 HZ</span>
-          <span>CARGA · 1MB</span>
-        </div>
+          </div>
+        )}
       </div>
 
       {over && (
         <div className="modal-bd">
           <div className="modal">
             <h2>FIN DEL JUEGO</h2>
+            {esNuevoRecord && (
+              <div
+                className="pixel neon-yellow"
+                style={{ fontSize: 13, marginBottom: 4, letterSpacing: "0.08em" }}
+              >
+                ¡NUEVO RÉCORD!
+              </div>
+            )}
             <div className="final-label">PUNTUACIÓN FINAL</div>
             <div className="final">{score.toLocaleString("es-ES")}</div>
+            {game.id === "tetris" && (
+              <div
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: "var(--ink-dim)",
+                  marginTop: 4,
+                  letterSpacing: "0.05em",
+                }}
+              >
+                Líneas: {lines} · Combo máximo: {maxCombo}
+              </div>
+            )}
             {!saved ? (
               <div className="input-row">
                 <input
