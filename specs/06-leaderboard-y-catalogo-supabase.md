@@ -24,9 +24,13 @@ identifica a cada score por un nombre de texto libre, no por un usuario autentic
 
 **Dentro:**
 
-- **Tabla `games`.** Nueva tabla en el esquema `public`, sembrada por migración SQL con
-  los 9 juegos que hoy viven en el array `GAMES` de `lib/games.ts` (incluido
-  `asteroids`, añadido en SPEC 05). RLS: `SELECT` público para todos (`anon` y
+- **Tabla `games`.** Nueva tabla en el esquema `public`, sembrada por migración SQL
+  únicamente con `asteroids` (SPEC 05), el único juego del array `GAMES` de
+  `lib/games.ts` que tiene motor real implementado hasta el momento. Los otros 8
+  juegos del array (bloque-buster, caída, serpentina, glotón, invasores, rocas,
+  ranaria, duelo-pixel) no se siembran en esta spec — se añadirán a `games` en la
+  spec que implemente el motor real de cada uno, siguiendo el mismo patrón que
+  SPEC 05 estableció para asteroids. RLS: `SELECT` público para todos (`anon` y
   `authenticated`); sin policy de `INSERT`/`UPDATE`/`DELETE` — el catálogo solo se
   modifica vía migración SQL, no hay pantalla de administración en esta spec.
 - **Tabla `scores`.** Nueva tabla vacía en `public`, con `game_id` como FK a
@@ -134,9 +138,10 @@ create policy "scores_select_publico" on public.scores for select using (true);
 create policy "scores_insert_publico" on public.scores for insert with check (true);
 
 insert into public.games (id, title, short, long, cat, cover, color, best, plays) values
-  ('bloque-buster', 'BLOQUE BUSTER', '…', '…', 'ARCADE', 'cover-bricks', 'cyan', 28450, '12.4K'),
-  -- … resto de los 9 juegos actuales de lib/games.ts (incluido 'asteroids' de SPEC 05)
-  ;
+  ('asteroids', 'ASTEROIDS', '…', '…', 'SHOOTER', 'cover-rocas', 'yellow', 41200, '15.6K');
+  -- único juego sembrado: es el único con motor real implementado (SPEC 05).
+  -- El resto de entradas de lib/games.ts se añaden en la spec que implemente
+  -- su motor correspondiente.
 ```
 
 **TypeScript (`lib/games.ts`, solo tipos tras esta spec):**
@@ -183,23 +188,24 @@ export async function guardarScore(entry: {
 Cada paso deja la app arrancando (`next dev`) sin errores.
 
 1. **Migración.** Escribir `supabase/migrations/<timestamp>_games_y_scores.sql` con
-   las tablas, policies e `insert` de siembra (los 9 juegos actuales, copiados
+   las tablas, policies e `insert` de siembra (únicamente `asteroids`, copiado
    literalmente de `lib/games.ts`). Aplicarla vía `apply_migration` del MCP de
-   Supabase. Prueba manual: `list_tables` del MCP muestra `games` con 9 filas y
+   Supabase. Prueba manual: `list_tables` del MCP muestra `games` con 1 fila y
    `scores` vacía; `get_advisors` no reporta RLS deshabilitado en ninguna de las dos.
 2. **Capa de datos.** Crear `lib/data/games.ts` y `lib/data/scores.ts` con las
    funciones de la sección anterior, usando `crearClienteSupabaseServidor()` de SPEC 04. Reducir `lib/games.ts` a solo las interfaces `Game`/`ScoreRow` (retirar
    `GAMES`, `seededScores`, `PLAYERS`). Prueba manual: `npx tsc --noEmit` compila
    (fallará hasta el paso 3, que actualiza los imports que usaban `GAMES`).
 3. **`/biblioteca`.** Cambiar el import de `GAMES` por `await obtenerJuegos()` en el
-   Server Component. Prueba manual: `/biblioteca` muestra las mismas 9 tarjetas que
-   antes, con los mismos datos.
+   Server Component. Prueba manual: `/biblioteca` muestra 1 tarjeta (asteroids), con
+   los mismos datos que tenía en `GAMES`.
 4. **`/juego/[id]`.** Convertir a Server Component: `await obtenerJuego(id)` (con
    `notFound()` si es `null`) y `await obtenerMejoresScores(id, 10)` para la
    mini-tabla. Extraer el botón "JUGAR" (navegación con `useRouter`) a un componente
-   hijo `"use client"` si hace falta. Prueba manual: `/juego/asteroids` y
-   `/juego/rocas` cargan con los mismos datos de antes; la mini-tabla muestra scores
-   reales (vacía al principio, salvo los que se guarden en el paso 6).
+   hijo `"use client"` si hace falta. Prueba manual: `/juego/asteroids` carga con los
+   mismos datos de antes; la mini-tabla muestra scores reales (vacía al principio,
+   salvo los que se guarden en el paso 6). `/juego/rocas` (no sembrado en `games`,
+   ver Decisiones) devuelve `notFound()`.
 5. **`/salon`.** Crear `app/salon/actions.ts` (`"use server"`) que exporta una
    función envolviendo `obtenerJuegos()` y `obtenerMejoresScores`. Cambiar
    `HallOfFame` para cargar juegos y scores del tab activo vía esas acciones en un
@@ -225,13 +231,13 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
 - [ ] `npx next build` termina sin errores ni warnings de TypeScript.
 - [ ] `supabase/migrations/` contiene una migración que crea `games` y `scores` con
       RLS habilitada en ambas.
-- [ ] La tabla `games` tiene exactamente 9 filas tras la migración, incluida
-      `asteroids`.
+- [ ] La tabla `games` tiene exactamente 1 fila tras la migración: `asteroids`
+      (único juego con motor real implementado hasta el momento).
 - [ ] `lib/games.ts` ya no exporta `GAMES`, `seededScores` ni `PLAYERS`; solo las
       interfaces `Game` y `ScoreRow`.
-- [ ] `/biblioteca` muestra 9 tarjetas leídas de la tabla `games`.
-- [ ] `/juego/asteroids` y `/juego/rocas` cargan datos del juego desde Supabase y
-      muestran `notFound()` para un `id` inexistente.
+- [ ] `/biblioteca` muestra 1 tarjeta (asteroids) leída de la tabla `games`.
+- [ ] `/juego/asteroids` carga datos del juego desde Supabase; `/juego/rocas` (y
+      cualquier otro `id` no sembrado en `games`) muestra `notFound()`.
 - [ ] `/salon` muestra, para un juego sin scores, el mensaje de tabla vacía sin
       podio, en vez de filas simuladas.
 - [ ] Jugar una partida de `asteroids`, pulsar `GUARDAR PUNTUACIÓN` con un nombre, y
@@ -250,6 +256,12 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
 
 ## Decisiones
 
+- **Sí:** sembrar `games` únicamente con `asteroids`, no con los 9 juegos del array
+  `GAMES`. Decisión tomada durante la implementación (paso 8), corrigiendo el
+  alcance original de esta spec: `asteroids` es el único juego con motor real
+  implementado (SPEC 05); el resto son placeholders visuales sin motor jugable.
+  Sembrar el catálogo real con juegos que no se pueden jugar de verdad sería
+  engañoso. Cada juego se añade a `games` en la spec que implemente su motor.
 - **Sí:** una sola spec para `games` y `scores` en vez de dos separadas, decisión
   explícita del usuario en la fase de preguntas, aunque ambas tablas son dominios
   independientes. Quedan documentadas como dos migraciones lógicas dentro del mismo
@@ -294,12 +306,12 @@ Cada paso deja la app arrancando (`next dev`) sin errores.
 
 ## Riesgos
 
-| Riesgo                                                                                                       | Mitigación                                                                                                                                                      |
-| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `INSERT` público en `scores` permite spam de puntuaciones falsas desde la consola del navegador              | Mismo nivel de exposición que el `localStorage.av_scores` actual; se acepta explícitamente en las decisiones, y queda documentado para cuando exista auth real. |
-| La migración de siembra de `games` se desincroniza con los datos que hoy tiene `lib/games.ts` (copia manual) | El paso 1 copia los 9 registros literalmente del archivo actual antes de borrarlo en el paso 2; la prueba manual del paso 1 verifica 9 filas.                   |
-| `/salon` hace una llamada por cada tab en vez de traer todo de una vez, generando más round-trips            | Aceptado: son 9 juegos como máximo, cada consulta es un `select … limit 12` indexado por `game_id`; no justifica una consulta agregada más compleja.            |
-| Convertir `/juego/[id]` de Client a Server Component rompe el botón "JUGAR" que hoy usa `useRouter`          | El paso 4 extrae explícitamente ese botón a un componente hijo `"use client"` antes de tocar el resto de la página.                                             |
+| Riesgo                                                                                                       | Mitigación                                                                                                                                                                                                      |
+| ------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `INSERT` público en `scores` permite spam de puntuaciones falsas desde la consola del navegador              | Mismo nivel de exposición que el `localStorage.av_scores` actual; se acepta explícitamente en las decisiones, y queda documentado para cuando exista auth real.                                                 |
+| La migración de siembra de `games` se desincroniza con los datos que hoy tiene `lib/games.ts` (copia manual) | El paso 1 copia el registro de `asteroids` literalmente del archivo actual antes de borrarlo en el paso 2; la prueba manual del paso 1 verifica 1 fila.                                                         |
+| `/salon` hace una llamada por cada tab en vez de traer todo de una vez, generando más round-trips            | Aceptado: son como máximo tantos juegos como tenga `games` (hoy 1, crecerá con futuras specs), cada consulta es un `select … limit 12` indexado por `game_id`; no justifica una consulta agregada más compleja. |
+| Convertir `/juego/[id]` de Client a Server Component rompe el botón "JUGAR" que hoy usa `useRouter`          | El paso 4 extrae explícitamente ese botón a un componente hijo `"use client"` antes de tocar el resto de la página.                                                                                             |
 
 ---
 
