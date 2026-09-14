@@ -1,6 +1,6 @@
 # SPEC 06 — Leaderboard y catálogo de juegos reales en Supabase
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 04
 > **Fecha:** 2026-09-14
 > **Objetivo:** Mover el catálogo `GAMES` y el leaderboard de `/salon` y `/juego/[id]` de datos mock/`localStorage` a dos tablas nuevas en Supabase (`games` sembrada por migración, `scores` alimentada por partidas reales), retirando `seededScores`, `av_scores` y la ruta temporal `/diagnostico-supabase`.
