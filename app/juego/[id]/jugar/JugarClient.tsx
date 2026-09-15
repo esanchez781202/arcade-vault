@@ -127,7 +127,7 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
     setLevel(s.level);
     if (typeof s.lines === "number") setLines(s.lines);
     if (typeof s.maxCombo === "number") setMaxCombo(s.maxCombo);
-    if (s.state === "gameover") setOver(true);
+    if (s.state === "gameover" || s.state === "win") setOver(true);
   }, []);
 
   const endGame = () => {
@@ -165,6 +165,19 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
   // una pausa disparada por teclado.
   useEffect(() => {
     if (game.id !== "tetris") return;
+    function handleKeyDown(e: KeyboardEvent) {
+      if (over) return;
+      if (e.code === "KeyP" || e.code === "Escape") togglePause();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [game.id, over, togglePause]);
+
+  // Tecla P/Esc para pausar en Arkanoid (portado del prototipo), igual
+  // patrón que Tetris: se maneja aquí para que el botón PAUSA/REANUDAR y el
+  // overlay de pausa nunca se desincronicen de una pausa disparada por teclado.
+  useEffect(() => {
+    if (game.id !== "arkanoid") return;
     function handleKeyDown(e: KeyboardEvent) {
       if (over) return;
       if (e.code === "KeyP" || e.code === "Escape") togglePause();
@@ -237,7 +250,15 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
         <div className="crt" style={{ flex: "1 1 480px", minWidth: 0 }}>
           <div className="crt-screen">
             {MotorJuego ? (
-              <MotorJuego key={gameKey} ref={gameRef} onStateChange={handleGameStateChange} />
+              <MotorJuego
+                key={gameKey}
+                ref={gameRef}
+                onStateChange={handleGameStateChange}
+                onResumeRequested={() => {
+                  gameRef.current?.resume();
+                  setPaused(false);
+                }}
+              />
             ) : (
               <div className="game-arena">
                 <div className="grid-floor" />
@@ -247,7 +268,7 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
                 <div className="player-ship" />
               </div>
             )}
-            {paused && (
+            {paused && game.id !== "arkanoid" && (
               <div className="crt-content" style={{ background: "rgba(0,0,0,0.6)", zIndex: 5 }}>
                 <div>
                   <div className="pixel neon-yellow" style={{ fontSize: 22 }}>

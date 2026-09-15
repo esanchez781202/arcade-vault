@@ -7,6 +7,7 @@
 import type { ComponentType, Ref } from "react";
 import AsteroidsGame from "./asteroids/AsteroidsGame";
 import TetrisGame from "./tetris/TetrisGame";
+import ArkanoidGame from "./arkanoid/ArkanoidGame";
 
 export interface RealGameHandle {
   pause(): void;
@@ -26,10 +27,13 @@ export interface RealGameState {
 
 export interface RealGameProps {
   onStateChange: (state: RealGameState) => void;
+  /** Solo lo invoca ArkanoidGame (selector de nivel en pausa, SPEC 08). */
+  onResumeRequested?: () => void;
   ref?: Ref<RealGameHandle>;
 }
 
 export const REGISTRO_MOTORES: Record<string, ComponentType<RealGameProps>> = {
   asteroids: AsteroidsGame as ComponentType<RealGameProps>,
   tetris: TetrisGame as ComponentType<RealGameProps>,
+  arkanoid: ArkanoidGame as ComponentType<RealGameProps>,
 };
