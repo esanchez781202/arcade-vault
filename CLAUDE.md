@@ -93,6 +93,10 @@ con `new Image()` + `onload` antes de instanciar el motor.
 
 Antes de escribir código para una feature nueva, define la spec y luego impleméntala:
 
+- Agente `game-planner` (`.claude/agents/game-planner.md`) — **paso previo a `/add-game`**:
+  decide _qué_ juego añadir. Analiza catálogo, motores y huecos de categoría, puntúa una
+  shortlist y recomienda uno. Su memoria entre sesiones es
+  `references/game-suggestions-todo.md` (único archivo que modifica). No escribe specs ni código.
 - `/add-game` — **para añadir un juego jugable nuevo**. Skill propio del proyecto
   (`.claude/skills/add-game/`, con su `template.md`): audita el prototipo de origen,
   hace las preguntas que todo port necesita y escribe la spec. No escribe código.
@@ -120,6 +124,8 @@ del proyecto y no está en el lock.
   (`02-asteroids`, `03-tetris`, `04-arkanoid`) desde los que se portan los motores.
 - `references/source-assets/` — assets crudos (`snake-assets/`) antes de moverse a
   `public/games/`.
+- `references/game-suggestions-todo.md` — TODO de juegos candidatos; memoria persistente del
+  agente `game-planner`. Editable a mano.
 
 Para verificar cambios visuales, guarda los screenshots de Playwright en
 `.playwright-screenshots/`.
