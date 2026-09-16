@@ -8,6 +8,7 @@ import type { ComponentType, Ref } from "react";
 import AsteroidsGame from "./asteroids/AsteroidsGame";
 import TetrisGame from "./tetris/TetrisGame";
 import ArkanoidGame from "./arkanoid/ArkanoidGame";
+import SnakeGame from "./snake/SnakeGame";
 
 export interface RealGameHandle {
   pause(): void;
@@ -36,4 +37,5 @@ export const REGISTRO_MOTORES: Record<string, ComponentType<RealGameProps>> = {
   asteroids: AsteroidsGame as ComponentType<RealGameProps>,
   tetris: TetrisGame as ComponentType<RealGameProps>,
   arkanoid: ArkanoidGame as ComponentType<RealGameProps>,
+  snake: SnakeGame as ComponentType<RealGameProps>,
 };
