@@ -1,6 +1,6 @@
 # SPEC 09 — SNAKE: motor real y leaderboard
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 06
 > **Fecha:** 2026-09-15
 > **Objetivo:** Añadir una entrada real `snake` al catálogo con un motor de Snake jugable por grilla (mover, comer fruta, crecer, morir al chocar contra pared o contra su propia cola), usando sprites reales de fruta portados desde `references/source-assets/snake-assets/`, integrado en el reproductor y en el registro de motores existente.
