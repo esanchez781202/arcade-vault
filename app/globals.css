@@ -1105,6 +1105,94 @@ a {
   font-size: 12px;
   text-align: center;
 }
+/* ===== controles táctiles (SPEC 10) =====
+   Ocultos por defecto; solo se muestran en dispositivos táctiles
+   (pointer: coarse). Viven fuera de .crt-screen (que tiene overflow:hidden
+   y aspect-ratio fijo) para no superponerse nunca al canvas. */
+.touch-controls {
+  display: none;
+}
+@media (pointer: coarse) {
+  .touch-controls {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin-top: 16px;
+    padding: 4px 8px;
+  }
+}
+.touch-dpad {
+  display: grid;
+  grid-template-areas:
+    ".    up    ."
+    "left .     right"
+    ".    down  .";
+  grid-template-columns: repeat(3, 52px);
+  grid-template-rows: repeat(3, 52px);
+  gap: 4px;
+  touch-action: none;
+}
+.touch-dpad button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-2);
+  color: var(--cyan);
+  border: 1px solid var(--cyan);
+  border-radius: 8px;
+  font-family: var(--pixel);
+  font-size: 14px;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.touch-dpad button:active,
+.touch-dpad button.pressed {
+  background: var(--cyan);
+  color: #06060a;
+  box-shadow: 0 0 14px rgba(0, 245, 255, 0.6);
+}
+.touch-dpad .touch-up {
+  grid-area: up;
+}
+.touch-dpad .touch-down {
+  grid-area: down;
+}
+.touch-dpad .touch-left {
+  grid-area: left;
+}
+.touch-dpad .touch-right {
+  grid-area: right;
+}
+.touch-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  touch-action: none;
+}
+.touch-actions button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  color: var(--magenta);
+  border: 1px solid var(--magenta);
+  font-family: var(--pixel);
+  font-size: 12px;
+  cursor: pointer;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.touch-actions button:active,
+.touch-actions button.pressed {
+  background: var(--magenta);
+  color: #06060a;
+  box-shadow: 0 0 14px rgba(255, 0, 110, 0.6);
+}
+
 .crt-bottom {
   display: flex;
   align-items: center;
