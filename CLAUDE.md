@@ -155,6 +155,8 @@ del proyecto y no está en el lock.
   `public/games/`.
 - `references/game-suggestions-todo.md` — TODO de juegos candidatos; memoria persistente del
   agente `game-planner`. Editable a mano.
+- `references/games-with-themes.md` — qué juego tiene qué skins (`clasico`/`retro`/`neon` y
+  extras); memoria persistente del agente `skin-designer`. Editable a mano.
 
 Para verificar cambios visuales, guarda los screenshots de Playwright en
 `.playwright-screenshots/`.
