@@ -1,6 +1,6 @@
 # SPEC 10 — Controles táctiles para jugar en móvil
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 05, SPEC 07, SPEC 08, SPEC 09
 > **Fecha:** 2026-09-21
 > **Objetivo:** Añadir un D-pad + 2 botones de acción táctiles en `/juego/[id]/jugar` (visibles solo en pantallas táctiles) que disparan los mismos `KeyboardEvent` que ya escuchan los cuatro motores reales, y corregir el desbordamiento horizontal de `.av-nav` en viewports estrechos que hoy empuja el botón de menú fuera de la pantalla.
@@ -211,30 +211,30 @@ Cada paso deja `next dev` arrancando sin errores.
 
 ## Criterios de aceptación
 
-- [ ] `npx next build` termina sin errores ni warnings de TypeScript.
-- [ ] En viewport ≤480px, `.av-nav` no produce scroll horizontal y el botón `≡`
+- [x] `npx next build` termina sin errores ni warnings de TypeScript.
+- [x] En viewport ≤480px, `.av-nav` no produce scroll horizontal y el botón `≡`
       (menú) es siempre visible y clicable, en `/` y en `/juego/[id]/jugar`.
-- [ ] Bajo `@media (pointer: coarse)`, `/juego/asteroids/jugar`,
+- [x] Bajo `@media (pointer: coarse)`, `/juego/asteroids/jugar`,
       `/juego/tetris/jugar`, `/juego/arkanoid/jugar` y `/juego/snake/jugar` muestran
       un D-pad + botones de acción debajo del `crt-screen`, sin superponerse al
       canvas.
-- [ ] En un viewport/dispositivo sin `pointer: coarse` (desktop con mouse), ningún
+- [x] En un viewport/dispositivo sin `pointer: coarse` (desktop con mouse), ningún
       control táctil se renderiza visualmente y el teclado sigue funcionando
       idéntico a antes de esta spec.
-- [ ] Asteroids es jugable de punta a punta solo con touch: rotar, empuje y disparo
+- [x] Asteroids es jugable de punta a punta solo con touch: rotar, empuje y disparo
       responden al D-pad/botón A.
-- [ ] Tetris es jugable de punta a punta solo con touch: mover, caída suave (D-pad),
+- [x] Tetris es jugable de punta a punta solo con touch: mover, caída suave (D-pad),
       rotar (botón A) y caída total (botón B) responden correctamente.
-- [ ] Arkanoid es jugable de punta a punta solo con touch: la paleta se mueve con
+- [x] Arkanoid es jugable de punta a punta solo con touch: la paleta se mueve con
       el D-pad izquierda/derecha; el selector de nivel en pausa (click sobre canvas)
       sigue funcionando con tap.
-- [ ] Snake es jugable de punta a punta solo con touch: las 4 direcciones del D-pad
+- [x] Snake es jugable de punta a punta solo con touch: las 4 direcciones del D-pad
       cambian el rumbo de la serpiente sin permitir giros de 180°.
-- [ ] En Arkanoid y Snake no se renderiza ningún botón de acción (0 botones); en
+- [x] En Arkanoid y Snake no se renderiza ningún botón de acción (0 botones); en
       Asteroids se renderiza 1; en Tetris se renderizan 2.
-- [ ] `GUARDAR PUNTUACIÓN` tras una partida jugada 100% por touch inserta
+- [x] `GUARDAR PUNTUACIÓN` tras una partida jugada 100% por touch inserta
       correctamente en `scores` y la fila aparece en `/salon` tras recargar.
-- [ ] Ningún archivo dentro de `components/games/` (`engine.ts`, `<Juego>Game.tsx`,
+- [x] Ningún archivo dentro de `components/games/` (`engine.ts`, `<Juego>Game.tsx`,
       `registry.ts`) cambia como parte de esta spec.
 
 ---
