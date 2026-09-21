@@ -10,6 +10,9 @@
 // `createEngine` se pueda instanciar y descartar de forma controlada por
 // React (ver AsteroidsGame.tsx).
 
+import { conGlow, hexARgba, type SkinBaseId, type SkinPalette } from "../skins";
+import { ASTEROIDS_SKINS, type AsteroidsRole } from "./skins";
+
 export type AsteroidsGameState = "playing" | "dead" | "gameover";
 
 export interface AsteroidsEngineState {
@@ -68,8 +71,8 @@ class Bullet {
     if (this.ttl <= 0) this.dead = true;
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
-    ctx.fillStyle = "#fff";
+  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
+    ctx.fillStyle = p.entities.bala;
     ctx.beginPath();
     ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -130,18 +133,18 @@ class Asteroid {
     ];
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = p.ink;
     ctx.lineWidth = 1.5;
     ctx.lineJoin = "round";
     ctx.beginPath();
     ctx.moveTo(this.verts[0][0], this.verts[0][1]);
     for (let i = 1; i < this.verts.length; i++) ctx.lineTo(this.verts[i][0], this.verts[i][1]);
     ctx.closePath();
-    ctx.stroke();
+    conGlow(ctx, p.glow, 12, () => ctx.stroke());
     ctx.restore();
   }
 }
@@ -172,18 +175,18 @@ class PowerUp {
     if (this.ttl <= 0) this.dead = true;
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
     if (this.ttl < 2 && Math.floor(this.ttl * 8) % 2 === 0) return;
     const pulse = 0.85 + Math.sin(performance.now() / 150) * 0.15;
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(Math.PI / 4);
-    ctx.strokeStyle = "#0ff";
+    ctx.strokeStyle = p.accent;
     ctx.lineWidth = 2;
     const r = this.radius * pulse;
-    ctx.strokeRect(-r, -r, r * 2, r * 2);
+    conGlow(ctx, p.glow, 12, () => ctx.strokeRect(-r, -r, r * 2, r * 2));
     ctx.restore();
-    ctx.fillStyle = "#0ff";
+    ctx.fillStyle = p.accent;
     ctx.font = "bold 12px monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -258,7 +261,7 @@ class Ship {
     return [new Bullet(ox, oy, this.angle)];
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
     if (this.dead) return;
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
@@ -266,7 +269,7 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = p.ink;
     ctx.lineWidth = 1.5;
     ctx.lineJoin = "round";
 
@@ -277,7 +280,7 @@ class Ship {
     ctx.lineTo(-7, 0); // muesca trasera
     ctx.lineTo(-12, 9); // ala derecha
     ctx.closePath();
-    ctx.stroke();
+    conGlow(ctx, p.glow, 12, () => ctx.stroke());
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
@@ -285,7 +288,7 @@ class Ship {
       ctx.moveTo(-8, -4);
       ctx.lineTo(-8 - rand(6, 14), 0);
       ctx.lineTo(-8, 4);
-      ctx.strokeStyle = "rgba(255, 130, 0, 0.85)";
+      ctx.strokeStyle = p.entities.propulsor;
       ctx.stroke();
     }
 
@@ -321,9 +324,9 @@ class Particle {
     if (this.ttl <= 0) this.dead = true;
   }
 
-  draw(ctx: CanvasRenderingContext2D) {
+  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
     const alpha = this.ttl / this.life;
-    ctx.strokeStyle = `rgba(255,255,255,${alpha.toFixed(2)})`;
+    ctx.strokeStyle = hexARgba(p.inkDim, alpha);
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
@@ -346,6 +349,7 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
   let deadTimer: number;
   let powerUpSpawned: boolean;
   let killsSinceSpawn: number;
+  let skin: SkinBaseId = "clasico";
 
   function spawnAsteroids(count: number) {
     const SAFE_DIST = 130;
@@ -485,28 +489,29 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
 
   // ── Draw ────────────────────────────────────────────────────────────────────
   // drawHUD() del original se elimina: el HUD React del reproductor es el único visible.
-  function drawOverlay(title: string, sub: string) {
+  function drawOverlay(p: SkinPalette<AsteroidsRole>, title: string, sub: string) {
     ctx.textAlign = "center";
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = p.hud;
     ctx.font = "bold 46px monospace";
     ctx.fillText(title, W / 2, H / 2 - 18);
     ctx.font = "18px monospace";
-    ctx.fillStyle = "rgba(255,255,255,0.65)";
+    ctx.fillStyle = hexARgba(p.hud, 0.65);
     ctx.fillText(sub, W / 2, H / 2 + 22);
   }
 
   function draw() {
-    ctx.fillStyle = "#000";
+    const p = ASTEROIDS_SKINS[skin];
+    ctx.fillStyle = p.bg;
     ctx.fillRect(0, 0, W, H);
 
-    particles.forEach((p) => p.draw(ctx));
-    asteroids.forEach((a) => a.draw(ctx));
-    powerUps.forEach((p) => p.draw(ctx));
-    bullets.forEach((b) => b.draw(ctx));
-    ship.draw(ctx);
+    particles.forEach((particle) => particle.draw(ctx, p));
+    asteroids.forEach((a) => a.draw(ctx, p));
+    powerUps.forEach((powerUp) => powerUp.draw(ctx, p));
+    bullets.forEach((b) => b.draw(ctx, p));
+    ship.draw(ctx, p);
 
     if (state === "gameover") {
-      drawOverlay("GAME OVER", `PUNTAJE: ${score}   —   ESPACIO PARA REINICIAR`);
+      drawOverlay(p, "GAME OVER", `PUNTAJE: ${score}   —   ESPACIO PARA REINICIAR`);
     }
   }
 
@@ -519,9 +524,13 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     state = "gameover";
   }
 
+  function setSkin(s: SkinBaseId) {
+    skin = s;
+  }
+
   initGame();
 
-  return { update, draw, getState, forceGameOver };
+  return { update, draw, getState, forceGameOver, setSkin };
 }
 
 export type AsteroidsEngine = ReturnType<typeof createEngine>;

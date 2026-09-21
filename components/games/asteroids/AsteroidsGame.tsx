@@ -13,6 +13,7 @@ import {
   type AsteroidsEngineState,
   type AsteroidsInputState,
 } from "./engine";
+import type { SkinBaseId } from "../skins";
 
 export type { AsteroidsEngineState } from "./engine";
 
@@ -20,6 +21,7 @@ export interface AsteroidsGameHandle {
   pause(): void;
   resume(): void;
   forceGameOver(): void;
+  setSkin(skin: SkinBaseId): void;
 }
 
 interface AsteroidsGameProps {
@@ -88,6 +90,14 @@ export default function AsteroidsGame({ onStateChange, ref }: AsteroidsGameProps
         if (!engine) return;
         engine.forceGameOver();
         reportIfChanged(engine.getState());
+      },
+      setSkin(skin) {
+        const engine = engineRef.current;
+        if (!engine) return;
+        engine.setSkin(skin);
+        // Redibuja de inmediato aunque esté en pausa (el loop no corre en
+        // pausa) — mismo patrón que TetrisGame.tsx.
+        engine.draw();
       },
     }),
     [],

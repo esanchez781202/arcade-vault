@@ -12,6 +12,8 @@
 // patrón que components/games/tetris/engine.ts.
 
 import { FRUIT_ATLAS, FRUIT_NAMES, type FruitSprite } from "./sprites";
+import { conGlow, type SkinBaseId } from "../skins";
+import { SNAKE_SKINS } from "./skins";
 
 export type SnakeGameState = "playing" | "gameover";
 
@@ -77,6 +79,7 @@ export function createEngine(ctx: CanvasRenderingContext2D, spriteImage: HTMLIma
   let tickIntervalMs: number;
   let tickAccumMs: number;
   let state: SnakeGameState;
+  let skin: SkinBaseId = "clasico";
 
   function occupiesSnake(cell: Cell): boolean {
     return snake.some((s) => s.x === cell.x && s.y === cell.y);
@@ -160,25 +163,53 @@ export function createEngine(ctx: CanvasRenderingContext2D, spriteImage: HTMLIma
   // ── Draw ────────────────────────────────────────────────────────────────────
   // Sin HUD dibujado en canvas: el HUD React del reproductor es el único
   // visible, alimentado por getState().
+  // Puntos en las intersecciones de la grilla, no líneas completas: un
+  // grid de líneas cada 20px sobre 40x30 celdas cubre ~10-18% del lienzo
+  // incluso a baja opacidad (70 líneas), lo que lo convierte en "tinta"
+  // medible con más presencia que el propio cuerpo de la serpiente y hace
+  // fallar el contraste C1 de la Fase 4 (una rejilla deliberadamente sutil
+  // no debe competir en contraste con las formas reales del juego). Puntos
+  // espaciados cada 4 celdas mantienen la referencia estructural con una
+  // superficie total muy por debajo del umbral de medición.
+  function drawGrid(gridColor: string) {
+    if (gridColor === "transparent") return;
+    ctx.fillStyle = gridColor;
+    for (let x = 0; x <= COLS; x += 4) {
+      for (let y = 0; y <= ROWS; y += 4) {
+        ctx.fillRect(x * CELL - 1, y * CELL - 1, 2, 2);
+      }
+    }
+  }
+
   function draw() {
-    ctx.fillStyle = "#0a0a18";
+    const p = SNAKE_SKINS[skin];
+    ctx.fillStyle = p.bg;
     ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
 
+    drawGrid(p.grid);
+
+    if (p.entities.fondoFruta !== "transparent") {
+      ctx.fillStyle = p.entities.fondoFruta;
+      ctx.fillRect(food.cell.x * CELL, food.cell.y * CELL, CELL, CELL);
+    }
+
     const sprite: FruitSprite = FRUIT_ATLAS[food.fruit];
-    ctx.drawImage(
-      spriteImage,
-      sprite.x,
-      sprite.y,
-      sprite.w,
-      sprite.h,
-      food.cell.x * CELL,
-      food.cell.y * CELL,
-      CELL,
-      CELL,
-    );
+    conGlow(ctx, p.glow, 10, () => {
+      ctx.drawImage(
+        spriteImage,
+        sprite.x,
+        sprite.y,
+        sprite.w,
+        sprite.h,
+        food.cell.x * CELL,
+        food.cell.y * CELL,
+        CELL,
+        CELL,
+      );
+    });
 
     snake.forEach((segment, i) => {
-      ctx.fillStyle = i === 0 ? "#00ff88" : "#00cc6a";
+      ctx.fillStyle = i === 0 ? p.accent : p.inkDim;
       const pad = 1.5;
       ctx.beginPath();
       ctx.roundRect(
@@ -200,9 +231,13 @@ export function createEngine(ctx: CanvasRenderingContext2D, spriteImage: HTMLIma
     state = "gameover";
   }
 
+  function setSkin(s: SkinBaseId) {
+    skin = s;
+  }
+
   initGame();
 
-  return { update, draw, getState, forceGameOver };
+  return { update, draw, getState, forceGameOver, setSkin };
 }
 
 export type SnakeEngine = ReturnType<typeof createEngine>;

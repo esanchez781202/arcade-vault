@@ -19,6 +19,8 @@ import {
   type SnakeInputState,
 } from "./engine";
 import { FRUIT_IMAGE_SRC } from "./sprites";
+import { leerSkin, type SkinBaseId } from "../skins";
+import { SNAKE_SKINS, SNAKE_SKIN_IDS } from "./skins";
 
 export type { SnakeEngineState } from "./engine";
 
@@ -26,6 +28,7 @@ export interface SnakeGameHandle {
   pause(): void;
   resume(): void;
   forceGameOver(): void;
+  setSkin(skin: SkinBaseId): void;
 }
 
 interface SnakeGameProps {
@@ -48,6 +51,11 @@ export default function SnakeGame({ onStateChange, ref }: SnakeGameProps) {
   const pendingRef = useRef({ up: false, down: false, left: false, right: false });
   const lastReportedRef = useRef<SnakeEngineState | null>(null);
   const onStateChangeRef = useRef(onStateChange);
+  // Preferencia leída de localStorage al montar (ver mount effect): el
+  // motor todavía no existe mientras carga el sprite, así que la pantalla
+  // "CARGANDO..." y el setSkin() diferido durante la carga la consumen
+  // desde aquí en vez de esperar la primera llamada de JugarClient.
+  const currentSkinRef = useRef<SkinBaseId>("clasico");
 
   useEffect(() => {
     onStateChangeRef.current = onStateChange;
@@ -98,6 +106,15 @@ export default function SnakeGame({ onStateChange, ref }: SnakeGameProps) {
         engine.forceGameOver();
         reportIfChanged(engine.getState());
       },
+      setSkin(skin) {
+        currentSkinRef.current = skin;
+        const engine = engineRef.current;
+        if (!engine) return;
+        engine.setSkin(skin);
+        // Redibuja de inmediato aunque esté en pausa (el loop no corre en
+        // pausa) — mismo patrón que AsteroidsGame.tsx/TetrisGame.tsx.
+        engine.draw();
+      },
     }),
     [],
   );
@@ -110,9 +127,17 @@ export default function SnakeGame({ onStateChange, ref }: SnakeGameProps) {
 
     let active = true;
 
-    ctx.fillStyle = "#0a0a18";
+    // Lee la preferencia guardada directamente (no vía props): el HUD de
+    // JugarClient no puede llamar a setSkin() hasta que este handle exista,
+    // pero el handle ya existe antes de que termine de cargar el sprite —
+    // sin esto, la pantalla "CARGANDO..." parpadearía siempre en `clasico`.
+    const initialSkin = leerSkin("snake", SNAKE_SKIN_IDS) as SkinBaseId;
+    currentSkinRef.current = initialSkin;
+    const loadingPalette = SNAKE_SKINS[initialSkin];
+
+    ctx.fillStyle = loadingPalette.bg;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    ctx.fillStyle = "#00ff88";
+    ctx.fillStyle = loadingPalette.hud;
     ctx.font = "20px monospace";
     ctx.textAlign = "center";
     ctx.fillText("CARGANDO...", CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
@@ -126,6 +151,7 @@ export default function SnakeGame({ onStateChange, ref }: SnakeGameProps) {
       if (!active) return;
 
       const engine = createEngine(ctx, spriteImage);
+      engine.setSkin(currentSkinRef.current);
       engineRef.current = engine;
       lastReportedRef.current = null;
       reportIfChanged(engine.getState());

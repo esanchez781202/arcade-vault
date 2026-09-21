@@ -19,31 +19,27 @@ import {
   type TetrisEngineState,
   type TetrisInputState,
   type TetrisSkin,
-  type TetrisTheme,
 } from "./engine";
 
-export type { TetrisEngineState, TetrisSkin, TetrisTheme } from "./engine";
+export type { TetrisEngineState, TetrisSkin } from "./engine";
 
 export interface TetrisGameHandle {
   pause(): void;
   resume(): void;
   forceGameOver(): void;
-  setTheme(theme: TetrisTheme): void;
   setSkin(skin: TetrisSkin): void;
 }
 
-const THEME_KEY = "tetris-theme";
 const SKIN_KEY = "tetris-skin";
 const START_LEVEL_KEY = "tetris-start-level";
 
-function readInitialSettings(): { theme: TetrisTheme; skin: TetrisSkin; startLevel: number } {
-  const theme: TetrisTheme = window.localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark";
+function readInitialSettings(): { skin: TetrisSkin; startLevel: number } {
   const savedSkin = window.localStorage.getItem(SKIN_KEY);
   const skin: TetrisSkin =
     savedSkin === "neon" || savedSkin === "pastel" || savedSkin === "pixel" ? savedSkin : "retro";
   const savedLevel = parseInt(window.localStorage.getItem(START_LEVEL_KEY) ?? "1", 10);
   const startLevel = Number.isFinite(savedLevel) ? Math.min(15, Math.max(1, savedLevel)) : 1;
-  return { theme, skin, startLevel };
+  return { skin, startLevel };
 }
 
 interface TetrisGameProps {
@@ -154,13 +150,6 @@ export default function TetrisGame({ onStateChange, ref }: TetrisGameProps) {
         engine.forceGameOver();
         reportIfChanged(engine.getState());
       },
-      setTheme(theme) {
-        const engine = engineRef.current;
-        if (!engine) return;
-        engine.setTheme(theme);
-        // Redibuja de inmediato aunque esté en pausa (el loop no corre en pausa).
-        engine.draw();
-      },
       setSkin(skin) {
         const engine = engineRef.current;
         if (!engine) return;
@@ -180,12 +169,13 @@ export default function TetrisGame({ onStateChange, ref }: TetrisGameProps) {
     if (!ctx || !nextCtx) return;
 
     const engine = createEngine(ctx, nextCtx);
-    // Lee tema/skin/nivel inicial directamente de localStorage al construir
-    // el motor (en vez de que un efecto externo los reaplique después): así
-    // el ajuste queda correcto sin importar cuántas veces React (Strict Mode
-    // en desarrollo) invoque este efecto de montaje.
-    const { theme, skin, startLevel } = readInitialSettings();
-    engine.setTheme(theme);
+    // Lee skin/nivel inicial directamente de localStorage al construir el
+    // motor (en vez de que un efecto externo los reaplique después): así el
+    // ajuste queda correcto sin importar cuántas veces React (Strict Mode en
+    // desarrollo) invoque este efecto de montaje. El tema queda fijo en
+    // "dark" (único usado en la web; no hay modo claro fuera del canvas).
+    const { skin, startLevel } = readInitialSettings();
+    engine.setTheme("dark");
     engine.setSkin(skin);
     if (startLevel !== 1) engine.setStartLevel(startLevel);
     engineRef.current = engine;
