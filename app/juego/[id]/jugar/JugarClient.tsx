@@ -17,6 +17,8 @@ import {
   type RealGameHandle,
   type RealGameState,
 } from "@/components/games/registry";
+import { SKIN_LABELS } from "@/components/games/skins";
+import { useSkinPreference } from "@/components/games/use-skin-preference";
 import { guardarScoreAction } from "./actions";
 
 interface RealGameStateWithLines extends RealGameState {
@@ -24,17 +26,12 @@ interface RealGameStateWithLines extends RealGameState {
   maxCombo?: number;
 }
 
-const TETRIS_SKINS: { value: "retro" | "neon" | "pastel" | "pixel"; label: string }[] = [
-  { value: "retro", label: "Retro" },
-  { value: "neon", label: "Neon" },
-  { value: "pastel", label: "Pastel" },
-  { value: "pixel", label: "Pixel Art" },
-];
-
 export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGlobal: number }) {
   const router = useRouter();
   const { user } = useSession();
-  const MotorJuego = REGISTRO_MOTORES[game.id];
+  const motor = REGISTRO_MOTORES[game.id];
+  const MotorJuego = motor?.component;
+  const skinsPermitidas = motor?.skins ?? [];
 
   const [score, setScore] = useState(0);
   const [lives, setLives] = useState(3);
@@ -50,23 +47,19 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
   const [mejor, setMejor] = useState(mejorGlobal);
   const gameRef = useRef<RealGameHandle>(null);
 
-  // Ampliaciones portadas de references/started-games/03-tetris (solo
-  // afectan a la pantalla de Tetris, no al resto del sitio):
-  // toggle claro/oscuro, selector de skin y nivel inicial. Arrancan en su
-  // valor por defecto (igual en servidor y cliente) y leen la preferencia
-  // guardada tras montar, para no desincronizar el HTML de servidor/cliente.
-  const [tetrisTheme, setTetrisTheme] = useState<"dark" | "light">("dark");
-  const [tetrisSkin, setTetrisSkin] = useState<"retro" | "neon" | "pastel" | "pixel">("retro");
+  // Selector de skin genérico: aplica a cualquier motor con `skins.length >
+  // 0` en REGISTRO_MOTORES (hoy Asteroids y Tetris). Arranca en
+  // `skinsPermitidas[0]` (igual en servidor y cliente) y lee la preferencia
+  // guardada tras montar, para no desincronizar el HTML de hidratación.
+  const [skin, setSkin] = useSkinPreference(game.id, skinsPermitidas);
+
+  // Nivel inicial y controles: portados de references/started-games/03-tetris,
+  // solo afectan a la pantalla de Tetris.
   const [tetrisStartLevel, setTetrisStartLevel] = useState(1);
   const [showControls, setShowControls] = useState(false);
 
   useEffect(() => {
     if (game.id !== "tetris") return;
-    if (window.localStorage.getItem("tetris-theme") === "light") setTetrisTheme("light");
-    const savedSkin = window.localStorage.getItem("tetris-skin");
-    if (savedSkin === "neon" || savedSkin === "pastel" || savedSkin === "pixel") {
-      setTetrisSkin(savedSkin);
-    }
     const savedLevel = parseInt(window.localStorage.getItem("tetris-start-level") ?? "1", 10);
     if (Number.isFinite(savedLevel)) setTetrisStartLevel(Math.min(15, Math.max(1, savedLevel)));
   }, [game.id]);
@@ -85,33 +78,13 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
     if (score > 0 && score % 2500 < 100) setLevel((l) => l + 1);
   }, [score, MotorJuego]);
 
-  // Aplica cambios en vivo de tema/skin mientras el motor ya está montado
-  // (botón/selector). El nivel inicial no se aplica en vivo: `TetrisGame`
-  // lo lee de `localStorage` al (re)montar (ver readInitialSettings en
-  // TetrisGame.tsx) — evita depender del orden de efectos entre componentes,
-  // que con Strict Mode en desarrollo podía perderse en un remontaje.
+  // Aplica la skin elegida mientras el motor ya está montado (selector) y
+  // también tras un reinicio (gameKey cambia y remonta MotorJuego con el
+  // motor por defecto en "clasico").
   useEffect(() => {
-    if (game.id !== "tetris") return;
-    gameRef.current?.setTheme?.(tetrisTheme);
-  }, [game.id, tetrisTheme]);
-
-  useEffect(() => {
-    if (game.id !== "tetris") return;
-    gameRef.current?.setSkin?.(tetrisSkin);
-  }, [game.id, tetrisSkin]);
-
-  const toggleTetrisTheme = () => {
-    setTetrisTheme((t) => {
-      const next = t === "light" ? "dark" : "light";
-      window.localStorage.setItem("tetris-theme", next);
-      return next;
-    });
-  };
-
-  const changeTetrisSkin = (skin: "retro" | "neon" | "pastel" | "pixel") => {
-    setTetrisSkin(skin);
-    window.localStorage.setItem("tetris-skin", skin);
-  };
+    if (skinsPermitidas.length === 0) return;
+    gameRef.current?.setSkin?.(skin);
+  }, [skin, skinsPermitidas.length, gameKey]);
 
   const changeTetrisStartLevel = (delta: number) => {
     setTetrisStartLevel((l) => {
@@ -296,114 +269,114 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
           </div>
         </div>
 
-        {game.id === "tetris" && (
+        {(skinsPermitidas.length > 0 || game.id === "tetris") && (
           <div style={{ flex: "0 0 200px", display: "flex", flexDirection: "column", gap: 16 }}>
-            <button
-              className="btn ghost"
-              style={{ fontSize: 10, padding: "6px 10px" }}
-              onClick={toggleTetrisTheme}
-            >
-              {tetrisTheme === "light" ? "☀ CLARO" : "☾ OSCURO"}
-            </button>
-
-            <div className="hud-stat">
-              <div className="l">Siguiente</div>
-              <div
-                id="tetris-next-slot"
-                style={{
-                  width: 120,
-                  height: 120,
-                  background: "#000",
-                  border: "1px solid var(--ink-faint)",
-                  borderRadius: 8,
-                  marginTop: 4,
-                }}
-              />
-            </div>
-
-            <div className="hud-stat">
-              <div className="l">Skin</div>
-              <select
-                value={tetrisSkin}
-                onChange={(e) => changeTetrisSkin(e.target.value as typeof tetrisSkin)}
-                style={{
-                  background: "var(--panel, #0a0a12)",
-                  color: "var(--ink)",
-                  border: "1px solid var(--ink-faint)",
-                  borderRadius: 6,
-                  padding: "6px 8px",
-                  fontSize: 12,
-                }}
-              >
-                {TETRIS_SKINS.map((s) => (
-                  <option key={s.value} value={s.value}>
-                    {s.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="hud-stat">
-              <div className="l">Nivel inicial</div>
-              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                <button
-                  className="btn ghost"
-                  style={{ padding: "2px 10px", fontSize: 14 }}
-                  onClick={() => changeTetrisStartLevel(-1)}
-                  disabled={tetrisStartLevel <= 1}
-                >
-                  −
-                </button>
-                <span className="v" style={{ minWidth: 20, textAlign: "center" }}>
-                  {tetrisStartLevel}
-                </span>
-                <button
-                  className="btn ghost"
-                  style={{ padding: "2px 10px", fontSize: 14 }}
-                  onClick={() => changeTetrisStartLevel(1)}
-                  disabled={tetrisStartLevel >= 15}
-                >
-                  +
-                </button>
-              </div>
-              <div
-                className="mono"
-                style={{ fontSize: 9, color: "var(--ink-faint)", letterSpacing: "0.05em" }}
-              >
-                Aplica en la próxima partida
-              </div>
-            </div>
-
-            <div className="hud-stat">
-              <button
-                className="btn ghost"
-                style={{ fontSize: 10, padding: "6px 10px" }}
-                onClick={() => setShowControls((v) => !v)}
-              >
-                {showControls ? "OCULTAR CONTROLES" : "VER CONTROLES"}
-              </button>
-              {showControls && (
-                <ul
-                  className="mono"
+            {skinsPermitidas.length > 0 && (
+              <div className="hud-stat">
+                <div className="l">Skin</div>
+                <select
+                  value={skin}
+                  onChange={(e) => setSkin(e.target.value as typeof skin)}
                   style={{
-                    fontSize: 11,
-                    color: "var(--ink-dim)",
-                    listStyle: "none",
-                    padding: 0,
-                    marginTop: 8,
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: 4,
+                    background: "var(--bg-2)",
+                    color: "var(--ink)",
+                    border: "1px solid var(--ink-faint)",
+                    borderRadius: 6,
+                    padding: "6px 8px",
+                    fontSize: 12,
                   }}
                 >
-                  <li>← → mover</li>
-                  <li>↑ / X rotar</li>
-                  <li>↓ caída suave</li>
-                  <li>Espacio caída total</li>
-                  <li>P / Esc pausa</li>
-                </ul>
-              )}
-            </div>
+                  {skinsPermitidas.map((s) => (
+                    <option key={s} value={s}>
+                      {SKIN_LABELS[s]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
+
+            {game.id === "tetris" && (
+              <div className="hud-stat">
+                <div className="l">Siguiente</div>
+                <div
+                  id="tetris-next-slot"
+                  style={{
+                    width: 120,
+                    height: 120,
+                    background: "#000",
+                    border: "1px solid var(--ink-faint)",
+                    borderRadius: 8,
+                    marginTop: 4,
+                  }}
+                />
+              </div>
+            )}
+
+            {game.id === "tetris" && (
+              <div className="hud-stat">
+                <div className="l">Nivel inicial</div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button
+                    className="btn ghost"
+                    style={{ padding: "2px 10px", fontSize: 14 }}
+                    onClick={() => changeTetrisStartLevel(-1)}
+                    disabled={tetrisStartLevel <= 1}
+                  >
+                    −
+                  </button>
+                  <span className="v" style={{ minWidth: 20, textAlign: "center" }}>
+                    {tetrisStartLevel}
+                  </span>
+                  <button
+                    className="btn ghost"
+                    style={{ padding: "2px 10px", fontSize: 14 }}
+                    onClick={() => changeTetrisStartLevel(1)}
+                    disabled={tetrisStartLevel >= 15}
+                  >
+                    +
+                  </button>
+                </div>
+                <div
+                  className="mono"
+                  style={{ fontSize: 9, color: "var(--ink-faint)", letterSpacing: "0.05em" }}
+                >
+                  Aplica en la próxima partida
+                </div>
+              </div>
+            )}
+
+            {game.id === "tetris" && (
+              <div className="hud-stat">
+                <button
+                  className="btn ghost"
+                  style={{ fontSize: 10, padding: "6px 10px" }}
+                  onClick={() => setShowControls((v) => !v)}
+                >
+                  {showControls ? "OCULTAR CONTROLES" : "VER CONTROLES"}
+                </button>
+                {showControls && (
+                  <ul
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--ink-dim)",
+                      listStyle: "none",
+                      padding: 0,
+                      marginTop: 8,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 4,
+                    }}
+                  >
+                    <li>← → mover</li>
+                    <li>↑ / X rotar</li>
+                    <li>↓ caída suave</li>
+                    <li>Espacio caída total</li>
+                    <li>P / Esc pausa</li>
+                  </ul>
+                )}
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -12,6 +12,9 @@
 // usaba un spritesheet PNG cargado de forma asíncrona; se descartó a favor de
 // mantener el motor síncrono, sin `Image`/`fetch` (SPEC 08).
 
+import { conGlow, type SkinBaseId, type SkinPalette } from "../skins";
+import { ARKANOID_SKINS, type ArkanoidBlockRole } from "./skins";
+
 export type ArkanoidGameState = "playing" | "gameover" | "win";
 
 export interface ArkanoidEngineState {
@@ -47,22 +50,11 @@ const BLOCKS_ORIGIN_Y = 80;
 
 const EXPLOSION_DURATION = 150;
 
-// Colores vectoriales aproximados a los del spritesheet original.
-const BLOCK_COLOR_HEX: Record<string, string> = {
-  red: "#ff3b3b",
-  yellow: "#f0c040",
-  cyan: "#00e5ff",
-  magenta: "#ff2fd0",
-  hotpink: "#ff69b4",
-  green: "#39ff6a",
-  gray: "#8a8a94",
-};
-
 // ── Niveles (portados 1:1 de levels.js) ────────────────────────────────────────
 interface BlockSeed {
   col: number;
   row: number;
-  color: string;
+  color: ArkanoidBlockRole;
 }
 interface Level {
   speed: number;
@@ -70,9 +62,9 @@ interface Level {
 }
 
 const LEVELS: Level[] = (() => {
-  const rowColors1 = ["red", "yellow", "cyan", "magenta", "hotpink", "green"];
-  const rowColors2 = ["gray", "cyan", "hotpink", "yellow", "magenta", "green"];
-  const rowColors4 = ["cyan", "magenta", "green", "yellow", "hotpink", "red"];
+  const rowColors1: ArkanoidBlockRole[] = ["red", "yellow", "cyan", "magenta", "hotpink", "green"];
+  const rowColors2: ArkanoidBlockRole[] = ["gray", "cyan", "hotpink", "yellow", "magenta", "green"];
+  const rowColors4: ArkanoidBlockRole[] = ["cyan", "magenta", "green", "yellow", "hotpink", "red"];
 
   const l1: BlockSeed[] = [];
   for (let row = 0; row < 6; row++)
@@ -141,7 +133,7 @@ interface Block {
   y: number;
   w: number;
   h: number;
-  color: string;
+  color: ArkanoidBlockRole;
   alive: boolean;
 }
 interface Explosion {
@@ -149,7 +141,7 @@ interface Explosion {
   y: number;
   w: number;
   h: number;
-  color: string;
+  color: ArkanoidBlockRole;
   elapsed: number;
 }
 
@@ -179,6 +171,7 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
   let lives = 3;
   let level = 1;
   let state: ArkanoidGameState = "playing";
+  let skin: SkinBaseId = "clasico";
 
   function initPaddle() {
     paddle.x = (W - paddle.w) / 2;
@@ -287,13 +280,13 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
   // drawHUD()/drawOverlay() del original se eliminan: el HUD React del
   // reproductor es el único HUD visible; el modal de fin ya existente
   // cubre 'gameover'/'win'.
-  function drawScene() {
-    ctx.fillStyle = "#000";
+  function drawScene(p: SkinPalette<ArkanoidBlockRole>) {
+    ctx.fillStyle = p.bg;
     ctx.fillRect(0, 0, W, H);
 
     for (const block of blocks) {
       if (block.alive) {
-        ctx.fillStyle = BLOCK_COLOR_HEX[block.color] ?? "#fff";
+        ctx.fillStyle = p.entities[block.color];
         ctx.fillRect(block.x, block.y, block.w, block.h);
       }
     }
@@ -306,26 +299,27 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
       const cx = exp.x + exp.w / 2;
       const cy = exp.y + exp.h / 2;
       ctx.globalAlpha = Math.max(0, 1 - t);
-      ctx.fillStyle = BLOCK_COLOR_HEX[exp.color] ?? "#fff";
+      ctx.fillStyle = p.entities[exp.color];
       ctx.fillRect(cx - w / 2, cy - h / 2, w, h);
       ctx.globalAlpha = 1;
     }
 
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h);
+    ctx.fillStyle = p.ink;
+    conGlow(ctx, p.glow, 10, () => ctx.fillRect(paddle.x, paddle.y, paddle.w, paddle.h));
 
     ctx.beginPath();
     ctx.arc(ball.x + ball.w / 2, ball.y + ball.h / 2, ball.w / 2, 0, Math.PI * 2);
-    ctx.fillStyle = "#fff";
-    ctx.fill();
+    ctx.fillStyle = p.accent;
+    conGlow(ctx, p.glow, 10, () => ctx.fill());
   }
 
   function draw() {
-    drawScene();
+    drawScene(ARKANOID_SKINS[skin]);
   }
 
   function drawPaused() {
-    drawScene();
+    const p = ARKANOID_SKINS[skin];
+    drawScene(p);
 
     ctx.fillStyle = "rgba(0, 0, 0, 0.65)";
     ctx.fillRect(0, 0, W, H);
@@ -333,20 +327,20 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     ctx.font = "bold 16px monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.fillStyle = "#fff";
+    ctx.fillStyle = p.hud;
     ctx.fillText("Saltar al nivel:", W / 2, PAUSE_BTN_Y - 30);
 
     for (let i = 0; i < 5; i++) {
       const bx = PAUSE_BTN_ROW_X + i * (PAUSE_BTN_W + PAUSE_BTN_GAP);
       const isActive = i + 1 === level;
-      ctx.fillStyle = isActive ? "#f0c040" : "#444";
-      ctx.strokeStyle = "#fff";
+      ctx.fillStyle = isActive ? p.entities.yellow : p.inkDim;
+      ctx.strokeStyle = p.hud;
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.roundRect(bx, PAUSE_BTN_Y, PAUSE_BTN_W, PAUSE_BTN_H, 6);
       ctx.fill();
       ctx.stroke();
-      ctx.fillStyle = isActive ? "#000" : "#fff";
+      ctx.fillStyle = isActive ? p.bg : p.hud;
       ctx.font = "bold 20px monospace";
       ctx.fillText(String(i + 1), bx + PAUSE_BTN_W / 2, PAUSE_BTN_Y + PAUSE_BTN_H / 2);
     }
@@ -375,9 +369,22 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     state = "gameover";
   }
 
+  function setSkin(s: SkinBaseId) {
+    skin = s;
+  }
+
   initGame();
 
-  return { update, draw, drawPaused, hitTestPauseButton, jumpToLevel, getState, forceGameOver };
+  return {
+    update,
+    draw,
+    drawPaused,
+    hitTestPauseButton,
+    jumpToLevel,
+    getState,
+    forceGameOver,
+    setSkin,
+  };
 }
 
 export type ArkanoidEngine = ReturnType<typeof createEngine>;

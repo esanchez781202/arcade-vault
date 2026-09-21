@@ -10,6 +10,37 @@ No test runner configured yet. Scripts: `dev`, `build`, `lint` (eslint), `format
 
 Usa siempre `/frontend-design` para diseñar las interfaces de usuario.
 
+## Agentes
+
+Los subagentes del proyecto viven en `.claude/agents/`.
+
+- **`game-planner`** (`.claude/agents/game-planner.md`) — decide _qué_ juego añadir al
+  catálogo, no _cómo_. Invócalo **antes** de `/add-game`, cuando toque elegir un juego nuevo
+  o el usuario pregunte "¿qué añadimos ahora?". Lee `references/implemented-games.md`,
+  `components/games/registry.ts`, `lib/games.ts` (`CATS`), `references/started-games/` y
+  `specs/` para detectar huecos de categoría, y aplica el filtro duro que impone el
+  reproductor: marco CRT 4/3 de un solo canvas, solo teclado (+ click puntual), score como
+  entero único ascendente, motor encapsulable en `engine.ts` sin React. Su memoria entre
+  sesiones es `references/game-suggestions-todo.md` — **el único archivo que modifica**; no
+  escribe specs, código ni migraciones. Handoff: `game-planner` → `/add-game` (spec) →
+  `/spec-impl NN-slug` (implementación).
+- **`game-jam`** (`.claude/agents/game-jam.md`) — a partir de un tema libre del usuario,
+  propone tres juegos nuevos (mismo filtro duro que `game-planner`) y por cada uno escribe
+  **dos specs completas** — `01-core.md` (MVP) y `02-ampliada.md` (con extras) — en
+  `specs/game-jam/<game-id>/`, siguiendo el formato de `specs/07-*.md`/`08-*.md`/`09-*.md` y
+  la receta de `.claude/skills/add-game/template.md`. Son specs `Draft` sin número de
+  `specs/NN-slug.md` asignado — puro material de revisión: no escribe código, no aplica
+  migraciones y nunca elige un ganador entre las tres. Para construir una, el usuario la
+  aprueba a mano, la renombra a `specs/NN-slug.md` y corre `/spec-impl NN-slug`.
+- **`skin-designer`** (`.claude/agents/skin-designer.md`) — aplica los skins `clasico`
+  (default), `retro` y `neon` a **un único juego por invocación**, el que el usuario indique
+  (`asteroids`, `tetris`, `arkanoid` o `snake`); nunca recorre los cuatro motores solo. A
+  diferencia de `game-planner`/`game-jam`, sí escribe código: extrae los colores literales de
+  `engine.ts` a paletas (`components/games/skins.ts` + `<juego>/skins.ts`), diseña las paletas
+  nuevas con `/frontend-design` y verifica su contraste sobre el marco CRT oscuro con
+  Playwright. Su memoria entre sesiones es `references/games-with-themes.md` (qué juego tiene
+  qué skins y desde cuándo). Nunca toca lógica de juego, Supabase ni hace commit.
+
 ## Architecture
 
 Fijado a `next@16.3.4` / `react@19.2.8`. Las APIs difieren de versiones anteriores
@@ -93,6 +124,8 @@ con `new Image()` + `onload` antes de instanciar el motor.
 
 Antes de escribir código para una feature nueva, define la spec y luego impleméntala:
 
+- Agente `game-planner` — **paso previo a `/add-game`**: decide _qué_ juego añadir (ver
+  `## Agentes`).
 - `/add-game` — **para añadir un juego jugable nuevo**. Skill propio del proyecto
   (`.claude/skills/add-game/`, con su `template.md`): audita el prototipo de origen,
   hace las preguntas que todo port necesita y escribe la spec. No escribe código.
@@ -120,6 +153,10 @@ del proyecto y no está en el lock.
   (`02-asteroids`, `03-tetris`, `04-arkanoid`) desde los que se portan los motores.
 - `references/source-assets/` — assets crudos (`snake-assets/`) antes de moverse a
   `public/games/`.
+- `references/game-suggestions-todo.md` — TODO de juegos candidatos; memoria persistente del
+  agente `game-planner`. Editable a mano.
+- `references/games-with-themes.md` — qué juego tiene qué skins (`clasico`/`retro`/`neon` y
+  extras); memoria persistente del agente `skin-designer`. Editable a mano.
 
 Para verificar cambios visuales, guarda los screenshots de Playwright en
 `.playwright-screenshots/`.

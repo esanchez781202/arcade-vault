@@ -18,6 +18,7 @@ import {
   type ArkanoidEngineState,
   type ArkanoidInputState,
 } from "./engine";
+import type { SkinBaseId } from "../skins";
 
 export type { ArkanoidEngineState } from "./engine";
 
@@ -25,6 +26,7 @@ export interface ArkanoidGameHandle {
   pause(): void;
   resume(): void;
   forceGameOver(): void;
+  setSkin(skin: SkinBaseId): void;
 }
 
 interface ArkanoidGameProps {
@@ -93,6 +95,16 @@ export default function ArkanoidGame({ onStateChange, onResumeRequested, ref }: 
         if (!engine) return;
         engine.forceGameOver();
         reportIfChanged(engine.getState());
+      },
+      setSkin(skin) {
+        const engine = engineRef.current;
+        if (!engine) return;
+        engine.setSkin(skin);
+        // Redibuja de inmediato, incluso en pausa (el loop no corre ahí) —
+        // mismo patrón que AsteroidsGame.tsx/TetrisGame.tsx. En pausa hay
+        // que repintar el selector de nivel, no la escena "playing".
+        if (pausedRef.current) engine.drawPaused();
+        else engine.draw();
       },
     }),
     [],
