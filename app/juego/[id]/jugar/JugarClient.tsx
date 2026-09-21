@@ -112,8 +112,16 @@ function TouchButton({
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         e.preventDefault();
-        e.currentTarget.setPointerCapture(e.pointerId);
         dispatchTouchKey("keydown", code);
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+          // Sin puntero activo que capturar (p. ej. tap muy rápido): el
+          // keydown ya se despachó, así que el juego no se ve afectado.
+          // Sin captura, un pointerleave sin soltar el dedo dentro del
+          // botón podría no liberar la tecla; pointerup/pointercancel
+          // igualmente la liberan en el caso normal.
+        }
       }}
       onPointerUp={release}
       onPointerCancel={release}
