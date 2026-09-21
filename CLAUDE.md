@@ -32,6 +32,14 @@ Los subagentes del proyecto viven en `.claude/agents/`.
   `specs/NN-slug.md` asignado — puro material de revisión: no escribe código, no aplica
   migraciones y nunca elige un ganador entre las tres. Para construir una, el usuario la
   aprueba a mano, la renombra a `specs/NN-slug.md` y corre `/spec-impl NN-slug`.
+- **`skin-designer`** (`.claude/agents/skin-designer.md`) — aplica los skins `clasico`
+  (default), `retro` y `neon` a **un único juego por invocación**, el que el usuario indique
+  (`asteroids`, `tetris`, `arkanoid` o `snake`); nunca recorre los cuatro motores solo. A
+  diferencia de `game-planner`/`game-jam`, sí escribe código: extrae los colores literales de
+  `engine.ts` a paletas (`components/games/skins.ts` + `<juego>/skins.ts`), diseña las paletas
+  nuevas con `/frontend-design` y verifica su contraste sobre el marco CRT oscuro con
+  Playwright. Su memoria entre sesiones es `references/games-with-themes.md` (qué juego tiene
+  qué skins y desde cuándo). Nunca toca lógica de juego, Supabase ni hace commit.
 
 ## Architecture
 
