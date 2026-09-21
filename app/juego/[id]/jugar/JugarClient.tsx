@@ -26,6 +26,138 @@ interface RealGameStateWithLines extends RealGameState {
   maxCombo?: number;
 }
 
+// Controles táctiles (SPEC 10): un D-pad + hasta 2 botones de acción que, al
+// presionarse, despachan los mismos KeyboardEvent que ya escuchan los 4
+// motores reales (ver engine.ts / <Juego>Game.tsx de cada uno). No tocan
+// engine.ts ni RealGameHandle — el motor no distingue un evento sintético de
+// uno real. Solo se muestran bajo `@media (pointer: coarse)` (app/globals.css).
+interface TouchButtonConfig {
+  /** KeyboardEvent.code a despachar; null = el botón no se renderiza. */
+  code: string | null;
+  label: string;
+}
+
+interface TouchConfig {
+  dpad: {
+    up: TouchButtonConfig;
+    down: TouchButtonConfig;
+    left: TouchButtonConfig;
+    right: TouchButtonConfig;
+  };
+  /** 0, 1 o 2 botones de acción redondos. */
+  actions: TouchButtonConfig[];
+}
+
+const TOUCH_CONFIG: Record<string, TouchConfig> = {
+  asteroids: {
+    dpad: {
+      up: { code: "ArrowUp", label: "▲" },
+      down: { code: null, label: "▼" },
+      left: { code: "ArrowLeft", label: "◀" },
+      right: { code: "ArrowRight", label: "▶" },
+    },
+    actions: [{ code: "Space", label: "A" }],
+  },
+  tetris: {
+    dpad: {
+      up: { code: null, label: "▲" },
+      down: { code: "ArrowDown", label: "▼" },
+      left: { code: "ArrowLeft", label: "◀" },
+      right: { code: "ArrowRight", label: "▶" },
+    },
+    actions: [
+      { code: "ArrowUp", label: "A" },
+      { code: "Space", label: "B" },
+    ],
+  },
+  arkanoid: {
+    dpad: {
+      up: { code: null, label: "▲" },
+      down: { code: null, label: "▼" },
+      left: { code: "ArrowLeft", label: "◀" },
+      right: { code: "ArrowRight", label: "▶" },
+    },
+    actions: [],
+  },
+  snake: {
+    dpad: {
+      up: { code: "ArrowUp", label: "▲" },
+      down: { code: "ArrowDown", label: "▼" },
+      left: { code: "ArrowLeft", label: "◀" },
+      right: { code: "ArrowRight", label: "▶" },
+    },
+    actions: [],
+  },
+};
+
+function dispatchTouchKey(type: "keydown" | "keyup", code: string) {
+  window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
+}
+
+function TouchButton({
+  code,
+  label,
+  className,
+}: {
+  code: string | null;
+  label: string;
+  className?: string;
+}) {
+  if (!code) return null;
+  const release = () => dispatchTouchKey("keyup", code);
+  return (
+    <button
+      type="button"
+      className={className}
+      onContextMenu={(e) => e.preventDefault()}
+      onPointerDown={(e) => {
+        e.preventDefault();
+        e.currentTarget.setPointerCapture(e.pointerId);
+        dispatchTouchKey("keydown", code);
+      }}
+      onPointerUp={release}
+      onPointerCancel={release}
+      onPointerLeave={release}
+    >
+      {label}
+    </button>
+  );
+}
+
+function TouchControls({ gameId }: { gameId: string }) {
+  const config = TOUCH_CONFIG[gameId];
+  if (!config) return null;
+  return (
+    <div className="touch-controls">
+      <div className="touch-dpad">
+        <TouchButton className="touch-up" code={config.dpad.up.code} label={config.dpad.up.label} />
+        <TouchButton
+          className="touch-down"
+          code={config.dpad.down.code}
+          label={config.dpad.down.label}
+        />
+        <TouchButton
+          className="touch-left"
+          code={config.dpad.left.code}
+          label={config.dpad.left.label}
+        />
+        <TouchButton
+          className="touch-right"
+          code={config.dpad.right.code}
+          label={config.dpad.right.label}
+        />
+      </div>
+      {config.actions.length > 0 && (
+        <div className="touch-actions">
+          {config.actions.map((action) => (
+            <TouchButton key={action.label} code={action.code} label={action.label} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGlobal: number }) {
   const router = useRouter();
   const { user } = useSession();
