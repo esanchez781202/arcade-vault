@@ -322,6 +322,22 @@ a {
   }
 }
 
+/* Por debajo de ~480px, logo + botón de auth + hamburguesa no caben en una
+   sola fila sin encoger algo: sin esto, `.av-nav` desborda horizontalmente y
+   el botón `≡` (único acceso al menú en este ancho) queda fuera del
+   viewport. Se encoge el botón de auth, no el logo ni la hamburguesa. */
+@media (max-width: 480px) {
+  .av-nav {
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .av-nav .auth-btn {
+    padding: 8px 10px;
+    font-size: 8px;
+    margin-left: 8px;
+  }
+}
+
 .av-mobile-panel {
   position: fixed;
   inset: 0 0 0 auto;
