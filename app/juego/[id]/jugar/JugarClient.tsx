@@ -394,6 +394,7 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
               </div>
             )}
           </div>
+          {MotorJuego && <TouchControls gameId={game.id} />}
           <div className="crt-bottom">
             <span className="led">SEÑAL OK</span>
             <span>{game.title} · CRT-83 · 60 HZ</span>
