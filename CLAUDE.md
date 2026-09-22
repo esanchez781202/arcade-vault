@@ -40,6 +40,14 @@ Los subagentes del proyecto viven en `.claude/agents/`.
   nuevas con `/frontend-design` y verifica su contraste sobre el marco CRT oscuro con
   Playwright. Su memoria entre sesiones es `references/games-with-themes.md` (qué juego tiene
   qué skins y desde cuándo). Nunca toca lógica de juego, Supabase ni hace commit.
+- **`mobile-porter`** (`.claude/agents/mobile-porter.md`) — adapta a móvil **una única ruta
+  por invocación**, la que el usuario indique (`/`, `/biblioteca`, `/juego/[id]`,
+  `/juego/[id]/jugar`, `/salon`, `/acceso` o `/acerca-de`); nunca recorre las siete solo. Igual
+  que `skin-designer`, sí escribe código: audita con Playwright en 360×780/390×844 (y 1440×900
+  de control) contra `specs/10-controles-tactiles-movil.md` como contrato vigente, y corrige
+  `app/globals.css` sin alterar el aspecto en desktop. Su memoria entre sesiones es
+  `references/mobile-porting-status.md`. Nunca toca `components/games/`, Supabase ni hace
+  commit; no introduce PWA/manifest/service worker.
 
 ## Architecture
 
@@ -157,6 +165,8 @@ del proyecto y no está en el lock.
   agente `game-planner`. Editable a mano.
 - `references/games-with-themes.md` — qué juego tiene qué skins (`clasico`/`retro`/`neon` y
   extras); memoria persistente del agente `skin-designer`. Editable a mano.
+- `references/mobile-porting-status.md` — qué ruta está adaptada a móvil y con qué
+  verificación (M1-M6); memoria persistente del agente `mobile-porter`. Editable a mano.
 
 Para verificar cambios visuales, guarda los screenshots de Playwright en
 `.playwright-screenshots/`.
