@@ -1,6 +1,6 @@
 # SPEC 11 — Apariencia neón de los controles táctiles
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 10
 > **Fecha:** 2026-09-22
 > **Objetivo:** Rediseñar visualmente el D-pad y los botones de acción de `TouchControls` (implementados en SPEC 10) para que se vean como el componente de referencia `references/gamepad-assets/gamepad.html` (flechas SVG, hub central con gema pulsante, botones A/B circulares con halo de neón), sin tocar su lógica de despacho de eventos.
