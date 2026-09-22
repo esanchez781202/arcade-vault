@@ -1225,25 +1225,79 @@ a {
   gap: 10px;
   touch-action: none;
 }
+/* Botones A/B portados de references/gamepad-assets/gamepad.html (.ab).
+   Color por posición (1º = A magenta, 2º = B cyan), asignado en JugarClient.tsx. */
 .touch-actions button {
+  position: relative;
   width: 56px;
   height: 56px;
   border-radius: 50%;
-  background: var(--bg-2);
-  color: var(--magenta);
-  border: 1px solid var(--magenta);
-  font-family: var(--pixel);
-  font-size: 12px;
+  border: 2px solid;
+  background:
+    radial-gradient(circle at 32% 26%, rgba(255, 255, 255, 0.25), transparent 50%),
+    radial-gradient(circle at 50% 55%, var(--ab-mid), var(--ab-deep) 75%);
+  padding: 0;
   cursor: pointer;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  font-family: var(--pixel);
+  font-size: 12px;
+  color: #fff;
+  box-shadow:
+    0 6px 0 #050507,
+    0 0 22px var(--ab-glow),
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    inset 0 -4px 8px rgba(0, 0, 0, 0.4);
+  transition:
+    transform 80ms,
+    box-shadow 140ms;
+}
+.touch-actions button::after {
+  content: "";
+  position: absolute;
+  inset: -8px;
+  border-radius: 50%;
+  border: 1px dashed var(--ab-border);
+  opacity: 0;
+  transition:
+    opacity 140ms,
+    transform 200ms;
 }
 .touch-actions button:active,
 .touch-actions button.pressed {
-  background: var(--magenta);
-  color: #06060a;
-  box-shadow: 0 0 14px rgba(255, 0, 110, 0.6);
+  transform: translateY(4px) scale(0.97);
+  box-shadow:
+    0 1px 0 #050507,
+    0 0 36px var(--ab-glow),
+    inset 0 0 18px rgba(0, 0, 0, 0.5);
+}
+.touch-actions button:active::after,
+.touch-actions button.pressed::after {
+  opacity: 1;
+  transform: scale(1.08);
+}
+.touch-actions .touch-action-a {
+  --ab-mid: rgba(255, 0, 110, 0.7);
+  --ab-deep: rgba(110, 0, 40, 0.95);
+  --ab-glow: rgba(255, 0, 110, 0.4);
+  --ab-border: var(--magenta);
+  border-color: var(--magenta);
+  text-shadow:
+    0 0 8px var(--magenta),
+    0 0 18px var(--magenta),
+    0 1px 0 rgba(0, 0, 0, 0.6);
+}
+.touch-actions .touch-action-b {
+  --ab-mid: rgba(0, 200, 230, 0.7);
+  --ab-deep: rgba(0, 50, 70, 0.95);
+  --ab-glow: rgba(0, 245, 255, 0.4);
+  --ab-border: var(--cyan);
+  border-color: var(--cyan);
+  text-shadow:
+    0 0 8px var(--cyan),
+    0 0 18px var(--cyan),
+    0 1px 0 rgba(0, 0, 0, 0.6);
 }
 
 .crt-bottom {
