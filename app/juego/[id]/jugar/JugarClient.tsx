@@ -94,14 +94,35 @@ function dispatchTouchKey(type: "keydown" | "keyup", code: string) {
   window.dispatchEvent(new KeyboardEvent(type, { code, bubbles: true }));
 }
 
+// Flechas del D-pad como SVG (portadas de references/gamepad-assets/gamepad.html).
+// Son decorativas: el nombre accesible del botón lo da DIRECCION_LABEL vía aria-label.
+type DireccionDpad = "up" | "down" | "left" | "right";
+
+const DPAD_ARROW_PATH: Record<DireccionDpad, string> = {
+  up: "M12 4 L20 16 L4 16 Z",
+  right: "M8 4 L20 12 L8 20 Z",
+  down: "M4 8 L20 8 L12 20 Z",
+  left: "M16 4 L16 20 L4 12 Z",
+};
+
+const DPAD_ARROW_LABEL: Record<DireccionDpad, string> = {
+  up: "Arriba",
+  right: "Derecha",
+  down: "Abajo",
+  left: "Izquierda",
+};
+
 function TouchButton({
   code,
   label,
   className,
+  direction,
 }: {
   code: string | null;
   label: string;
   className?: string;
+  /** Si viene, el botón dibuja la flecha SVG de esa dirección en vez de `label`. */
+  direction?: DireccionDpad;
 }) {
   if (!code) return null;
   const release = () => dispatchTouchKey("keyup", code);
@@ -109,6 +130,7 @@ function TouchButton({
     <button
       type="button"
       className={className}
+      aria-label={direction ? DPAD_ARROW_LABEL[direction] : undefined}
       onContextMenu={(e) => e.preventDefault()}
       onPointerDown={(e) => {
         e.preventDefault();
@@ -127,7 +149,13 @@ function TouchButton({
       onPointerCancel={release}
       onPointerLeave={release}
     >
-      {label}
+      {direction ? (
+        <svg className="touch-arrow" viewBox="0 0 24 24" aria-hidden="true">
+          <path d={DPAD_ARROW_PATH[direction]} fill="currentColor" />
+        </svg>
+      ) : (
+        label
+      )}
     </button>
   );
 }
@@ -138,22 +166,35 @@ function TouchControls({ gameId }: { gameId: string }) {
   return (
     <div className="touch-controls">
       <div className="touch-dpad">
-        <TouchButton className="touch-up" code={config.dpad.up.code} label={config.dpad.up.label} />
+        <TouchButton
+          className="touch-up"
+          direction="up"
+          code={config.dpad.up.code}
+          label={config.dpad.up.label}
+        />
         <TouchButton
           className="touch-down"
+          direction="down"
           code={config.dpad.down.code}
           label={config.dpad.down.label}
         />
         <TouchButton
           className="touch-left"
+          direction="left"
           code={config.dpad.left.code}
           label={config.dpad.left.label}
         />
         <TouchButton
           className="touch-right"
+          direction="right"
           code={config.dpad.right.code}
           label={config.dpad.right.label}
         />
+        {/* Hub decorativo: siempre presente, incluso si el juego activo no usa
+            las 4 flechas (p. ej. Arkanoid solo tiene ←/→). */}
+        <div className="touch-dpad-hub" aria-hidden="true">
+          <span className="touch-dpad-hub-gem" />
+        </div>
       </div>
       {config.actions.length > 0 && (
         <div className="touch-actions">
