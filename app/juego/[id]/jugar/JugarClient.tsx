@@ -198,8 +198,13 @@ function TouchControls({ gameId }: { gameId: string }) {
       </div>
       {config.actions.length > 0 && (
         <div className="touch-actions">
-          {config.actions.map((action) => (
-            <TouchButton key={action.label} code={action.code} label={action.label} />
+          {config.actions.map((action, i) => (
+            <TouchButton
+              key={action.label}
+              className={i === 0 ? "touch-action-a" : "touch-action-b"}
+              code={action.code}
+              label={action.label}
+            />
           ))}
         </div>
       )}
