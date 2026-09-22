@@ -1126,33 +1126,86 @@ a {
   display: grid;
   grid-template-areas:
     ".    up    ."
-    "left .     right"
+    "left hub   right"
     ".    down  .";
   grid-template-columns: repeat(3, 52px);
   grid-template-rows: repeat(3, 52px);
   gap: 4px;
   touch-action: none;
 }
+/* Bisel 3D portado de references/gamepad-assets/gamepad.html (.dp). */
 .touch-dpad button {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-2);
-  color: var(--cyan);
-  border: 1px solid var(--cyan);
-  border-radius: 8px;
+  padding: 0;
+  background: linear-gradient(180deg, #1a1a25, #0a0a12);
+  color: var(--ink-dim);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
   font-family: var(--pixel);
   font-size: 14px;
   cursor: pointer;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
+  box-shadow:
+    0 4px 0 #050507,
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    inset 0 -2px 4px rgba(0, 0, 0, 0.6);
+  transition:
+    transform 80ms,
+    box-shadow 140ms,
+    color 140ms,
+    border-color 140ms,
+    background 140ms;
 }
 .touch-dpad button:active,
 .touch-dpad button.pressed {
+  transform: translateY(3px);
+  color: var(--cyan);
+  background: linear-gradient(180deg, #08161e, #030a0e);
+  border-color: var(--cyan);
+  box-shadow:
+    0 1px 0 #050507,
+    inset 0 0 16px rgba(0, 245, 255, 0.45),
+    0 0 16px rgba(0, 245, 255, 0.5);
+}
+/* Flecha SVG dentro de cada botón del D-pad (decorativa, aria-hidden). */
+.touch-dpad .touch-arrow {
+  width: 22px;
+  height: 22px;
+  transition: filter 140ms;
+}
+.touch-dpad button:active .touch-arrow,
+.touch-dpad button.pressed .touch-arrow {
+  filter: drop-shadow(0 0 6px var(--cyan)) drop-shadow(0 0 12px var(--cyan));
+}
+/* Hub central decorativo: nunca interactivo, siempre visible aunque el juego
+   activo no use las 4 flechas (p. ej. Arkanoid). Reutiliza el keyframe
+   `pulse-led` ya definido más abajo para .live-led. */
+.touch-dpad-hub {
+  grid-area: hub;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle at 50% 50%, #181822 0%, #08080d 80%);
+  border: 1px solid rgba(0, 245, 255, 0.15);
+  border-radius: 6px;
+  pointer-events: none;
+  box-shadow:
+    inset 0 0 12px rgba(0, 0, 0, 0.8),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+}
+.touch-dpad-hub-gem {
+  width: 12px;
+  height: 12px;
   background: var(--cyan);
-  color: #06060a;
-  box-shadow: 0 0 14px rgba(0, 245, 255, 0.6);
+  box-shadow:
+    0 0 10px var(--cyan),
+    inset 0 0 4px rgba(0, 0, 0, 0.5);
+  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+  animation: pulse-led 2s ease-in-out infinite;
 }
 .touch-dpad .touch-up {
   grid-area: up;
