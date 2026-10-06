@@ -88,6 +88,18 @@ const TOUCH_CONFIG: Record<string, TouchConfig> = {
     },
     actions: [],
   },
+  // frogger (specs/game-jam/frogger/01-frogger-core.md): salto discreto de una
+  // celda en las 4 direcciones, sin botones de acción (FroggerGame.tsx solo
+  // escucha ArrowUp/Down/Left/Right, ver isTrackedCode).
+  frogger: {
+    dpad: {
+      up: { code: "ArrowUp", label: "▲" },
+      down: { code: "ArrowDown", label: "▼" },
+      left: { code: "ArrowLeft", label: "◀" },
+      right: { code: "ArrowRight", label: "▶" },
+    },
+    actions: [],
+  },
 };
 
 function dispatchTouchKey(type: "keydown" | "keyup", code: string) {

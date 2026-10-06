@@ -27,15 +27,18 @@ Lee el prompt del usuario y extrae una única ruta válida, de las siete del pro
 `/biblioteca`, `/juego/[id]`, `/juego/[id]/jugar`, `/salon`, `/acceso`, `/acerca-de`. Si no hay
 una clara, o el usuario nombra varias, detente aquí y pregúntale cuál de las siete quiere que
 trabajes en esta invocación — no elijas por él y no proceses el resto. Para las rutas con
-parámetro (`/juego/[id]` y `/juego/[id]/jugar`), usa un juego real de
-`references/implemented-games.md` (`asteroids`, `tetris`, `arkanoid` o `snake`) y dilo en el
-informe. Todo lo que sigue (Fases 1-5) es exclusivamente sobre esa ruta.
+parámetro (`/juego/[id]` y `/juego/[id]/jugar`), usa el `gameId` que te haya indicado quien te
+invoca; si no te lo dieron, usa un juego real de `references/implemented-games.md` (por
+ejemplo `asteroids`, `tetris`, `arkanoid` o `snake`) y dilo en el informe. Todo lo que sigue
+(Fases 1-5) es exclusivamente sobre esa ruta (y, si aplica, ese `gameId`).
 
 ## Fase 1 — Leer el estado (obligatoria, antes de tocar nada)
 
 1. `references/mobile-porting-status.md` — **tu memoria**. Si no existe, créalo con la plantilla
    de la Fase 5. Si la ruta objetivo ya figura ahí con M1-M6 en PASS, para aquí e infórmalo — no
-   reimplementes lo que ya existe.
+   reimplementes lo que ya existe. Excepción: si te indicaron un `gameId` concreto y la nota de
+   esa fila no cubre ese juego (p. ej. es un motor nuevo con su propio HUD/controles), vuelve a
+   auditar M1-M6 para ese `gameId` y amplía la nota de la fila existente en vez de duplicarla.
 2. `specs/10-controles-tactiles-movil.md` — el contrato móvil vigente del proyecto. Sus
    decisiones son ley y no las revisas: detección táctil por `@media (pointer: coarse)`, nunca
    por ancho de viewport ni `matchMedia` (evita desincronizar la hidratación SSR/cliente);

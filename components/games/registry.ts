@@ -12,6 +12,8 @@ import ArkanoidGame from "./arkanoid/ArkanoidGame";
 import { ARKANOID_SKIN_IDS } from "./arkanoid/skins";
 import SnakeGame from "./snake/SnakeGame";
 import { SNAKE_SKIN_IDS } from "./snake/skins";
+import FroggerGame from "./frogger/FroggerGame";
+import { FROGGER_SKIN_IDS } from "./frogger/skins";
 import type { SkinId } from "./skins";
 
 export interface RealGameHandle {
@@ -60,4 +62,5 @@ export const REGISTRO_MOTORES: Record<string, MotorEntry> = {
     skins: ARKANOID_SKIN_IDS,
   },
   snake: { component: SnakeGame as ComponentType<RealGameProps>, skins: SNAKE_SKIN_IDS },
+  frogger: { component: FroggerGame as ComponentType<RealGameProps>, skins: FROGGER_SKIN_IDS },
 };
