@@ -9,6 +9,7 @@ nunca se procesan varios a la vez.
 | arkanoid  | ✅      | ✅    | ✅   | —             | ✅ C1-C6 PASS         | 2026-09-21 |
 | asteroids | ✅      | ✅    | ✅   | —             | ⚠️ C5 falla (ver nota) | 2026-09-21 |
 | snake     | ✅      | ✅    | ✅   | —             | ✅ C1-C6 PASS         | 2026-09-21 |
+| frogger   | ✅      | ✅    | ✅   | —             | ⚠️ falla C1 (ver nota) | 2026-10-06 |
 
 ## Notas
 
@@ -43,3 +44,26 @@ nunca se procesan varios a la vez.
   envuelve el `drawImage` con `conGlow`, pero el sprite en sí no se tiñe. `ink` y `danger` sin
   consumidor (mismo motivo que Asteroids: Snake no tiene una forma "protagonista" adicional
   ni una animación de muerte propia).
+- **frogger (2026-10-06):** C2-C6 en PASS para `clasico`/`retro`/`neon`. Medido sobre un frame
+  pausado con la rana avanzada (2 saltos arriba + 1 izquierda) para que el tablero tuviera
+  vehículos, troncos y tortugas visibles. `components/games/frogger/skins.ts` añade el rol
+  `FroggerRole` (vehículos, troncos, tortugas, bordes de meta, 4 fondos de zona, HUD de ronda);
+  la tortuga sumergida no tiene slot propio, se deriva de `entities.tortuga` con
+  `hexARgba(..., 0.25)` para no desincronizar ambos colores entre skins. `retro`/`neon` añaden
+  una rejilla de puntos 2x2px cada 2 celdas (igual patrón que `snake/engine.ts`: líneas
+  completas superaban el umbral de ocupación de C4/C1 y se confundían con "ink").
+  **C1 falla de forma estructural e intencional en las tres skins**, no por un defecto de
+  paleta: Frogger es el único motor con fondo multi-zona (carretera/río/segura/meta) en vez de
+  un `bg` plano único, así que la metodología genérica de Fase 4 (un solo `bgColor` modal) no
+  aplica igual de limpio que en asteroids/arkanoid/snake. Con las zonas de fondo ya excluidas
+  de "ink" (ver script de verificación), el único elemento que sigue incumpliendo
+  `contraste >= 3.0` en las tres skins es la tortuga sumergida
+  (`hexARgba(entities.tortuga, 0.25)` mezclada con `entities.zonaRio`: contraste 1.51/1.45/1.88
+  en clasico/retro/neon) — **por diseño**: el camuflaje con el agua es la señal de peligro de
+  esa mecánica (igual que en el Frogger original), no un fallo de legibilidad a corregir. En
+  `clasico` además el tronco (`#6b4226`) da 2.01 contra el río (`#0a1a33`) — literal heredado de
+  antes de esta migración, intocable por contrato de "clasico" aunque el diseño original ya
+  tuviera ese contraste bajo (en `retro`/`neon`, donde sí se podía ajustar, el tronco se subió
+  a contraste >=3). El resto de "ink" real (coche, camión, tronco en retro/neon, tortuga
+  visible, HUD) pasa C1 con margen; C2 PASS en las tres (máximo >=4.5, p. ej. tortuga visible
+  en neon da 15.3). Capturas en `.playwright-screenshots/skins-frogger-{clasico,retro,neon}.png`.

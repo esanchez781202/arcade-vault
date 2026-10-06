@@ -141,13 +141,16 @@ Antes de escribir código para una feature nueva, define la spec y luego implem�
   estado `Draft`. El humano cambia el estado a `Aprobado` manualmente.
 - `/spec-impl NN-slug` — solo actúa si la spec está `Aprobado`; crea la rama
   `spec-NN-slug`, implementa paso a paso y **nunca hace commit automáticamente**.
+- `/spec-impl-game NN-slug` — igual que `/spec-impl` pero para specs de **motores de juego
+  nuevos**: al cerrar la implementación detona `@skin-designer` y después `@mobile-porter`
+  (secuencial, nunca en paralelo). Tampoco hace commit.
 - La numeración de `specs/` es secuencial con dos dígitos (`01-`, `02-`, …).
 - `specs/.spec-config.yml` controla `AutoCreateBranch` (default `true`).
 - Al terminar, el estado de la spec pasa a `Implementado`.
 
 Los skills viven en `.claude/skills/` y `.agents/skills/`. `spec` y `spec-impl` están
-fijados en `skills-lock.json` (origen `Klerith/fernando-skills`); `add-game` es local
-del proyecto y no está en el lock.
+fijados en `skills-lock.json` (origen `Klerith/fernando-skills`); `add-game` y
+`spec-impl-game` son locales del proyecto y no están en el lock.
 
 ## `references/` — material de origen (no conectado al build)
 
