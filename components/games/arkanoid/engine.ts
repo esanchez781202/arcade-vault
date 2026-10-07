@@ -360,8 +360,19 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     loadLevel(n);
   }
 
+  // Objeto único reutilizado por getState() (SPEC 12, causa #6): evita
+  // alojar un literal nuevo cada frame. ArkanoidGame.tsx hace una copia
+  // antes de guardarla en lastReportedRef — si guardara esta misma
+  // referencia, prev y state serían siempre el mismo objeto y
+  // reportIfChanged nunca detectaría un cambio.
+  const stateOut: ArkanoidEngineState = { score: 0, lives: 0, level: 1, state: "playing" };
+
   function getState(): ArkanoidEngineState {
-    return { score, lives, level, state };
+    stateOut.score = score;
+    stateOut.lives = lives;
+    stateOut.level = level;
+    stateOut.state = state;
+    return stateOut;
   }
 
   function forceGameOver() {

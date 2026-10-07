@@ -70,7 +70,10 @@ export default function ArkanoidGame({ onStateChange, onResumeRequested, ref }: 
       prev.level !== state.level ||
       prev.state !== state.state
     ) {
-      lastReportedRef.current = state;
+      // Copia: engine.getState() (SPEC 12) reutiliza un único objeto mutable
+      // entre frames. Guardar la referencia dejaría prev === state siempre,
+      // congelando el HUD sin error visible.
+      lastReportedRef.current = { ...state };
       onStateChangeRef.current(state);
     }
   }

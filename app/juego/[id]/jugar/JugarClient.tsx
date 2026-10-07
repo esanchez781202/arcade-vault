@@ -19,6 +19,7 @@ import {
 } from "@/components/games/registry";
 import { SKIN_LABELS } from "@/components/games/skins";
 import { useSkinPreference } from "@/components/games/use-skin-preference";
+import FpsOverlay from "@/components/games/fps-overlay";
 import { guardarScoreAction } from "./actions";
 
 interface RealGameStateWithLines extends RealGameState {
@@ -245,6 +246,18 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
   const [mejor, setMejor] = useState(mejorGlobal);
   const gameRef = useRef<RealGameHandle>(null);
 
+  // Puntuación/nivel simulados (juegos de catálogo sin motor real, SPEC 12
+  // causa #7): viven en refs y se escriben directo al DOM vía
+  // requestAnimationFrame, no en useState — así el tick de 220ms no
+  // re-renderiza el árbol completo del reproductor. `score`/`level` (arriba)
+  // solo se sincronizan desde estas refs en los puntos de transición
+  // (endGame, restart) que sí necesitan un valor de React: el modal de fin
+  // de partida y guardarScoreAction.
+  const simScoreRef = useRef(0);
+  const simLevelRef = useRef(1);
+  const scoreElRef = useRef<HTMLDivElement>(null);
+  const levelElRef = useRef<HTMLDivElement>(null);
+
   // Selector de skin genérico: aplica a cualquier motor con `skins.length >
   // 0` en REGISTRO_MOTORES (hoy Asteroids y Tetris). Arranca en
   // `skinsPermitidas[0]` (igual en servidor y cliente) y lee la preferencia
@@ -263,18 +276,42 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
   }, [game.id]);
 
   // Solo para juegos simulados: los motores reales reportan su propio estado
-  // real vía onStateChange (ver handleGameStateChange).
+  // real vía onStateChange (ver handleGameStateChange). El tick de 220ms
+  // actualiza simScoreRef/simLevelRef y escribe su texto directo en
+  // scoreElRef/levelElRef (ver JSX) sin pasar por setState — esos divs no
+  // llevan ninguna expresión de React como hijo en el modo simulado, así
+  // que React nunca reconcilia su contenido y la escritura manual persiste
+  // entre renders.
   useEffect(() => {
     if (MotorJuego) return;
-    if (over || paused) return;
-    const t = setInterval(() => setScore((s) => s + Math.floor(10 + Math.random() * 90)), 220);
-    return () => clearInterval(t);
-  }, [over, paused, MotorJuego]);
 
-  useEffect(() => {
-    if (MotorJuego) return;
-    if (score > 0 && score % 2500 < 100) setLevel((l) => l + 1);
-  }, [score, MotorJuego]);
+    const syncDom = () => {
+      if (scoreElRef.current) {
+        scoreElRef.current.textContent = simScoreRef.current.toLocaleString("es-ES");
+      }
+      if (levelElRef.current) {
+        levelElRef.current.textContent = String(simLevelRef.current).padStart(2, "0");
+      }
+    };
+    syncDom();
+    if (over || paused) return;
+
+    let rafId: number;
+    let lastTick: number | null = null;
+    const tick = (ts: number) => {
+      if (lastTick === null || ts - lastTick >= 220) {
+        lastTick = ts;
+        simScoreRef.current += Math.floor(10 + Math.random() * 90);
+        if (simScoreRef.current > 0 && simScoreRef.current % 2500 < 100) {
+          simLevelRef.current += 1;
+        }
+        syncDom();
+      }
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [over, paused, MotorJuego]);
 
   // Aplica la skin elegida mientras el motor ya está montado (selector) y
   // también tras un reinicio (gameKey cambia y remonta MotorJuego con el
@@ -305,6 +342,10 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
     if (MotorJuego) {
       gameRef.current?.forceGameOver();
     } else {
+      // Única sincronización a React del score/nivel simulados: el modal de
+      // fin de partida y guardarPuntuacion() sí necesitan el valor final.
+      setScore(simScoreRef.current);
+      setLevel(simLevelRef.current);
       setOver(true);
     }
   };
@@ -327,7 +368,14 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
     setPaused(false);
     setOver(false);
     setSaved(false);
-    if (MotorJuego) setGameKey((k) => k + 1);
+    if (MotorJuego) {
+      setGameKey((k) => k + 1);
+    } else {
+      simScoreRef.current = 0;
+      simLevelRef.current = 1;
+      if (scoreElRef.current) scoreElRef.current.textContent = "0";
+      if (levelElRef.current) levelElRef.current.textContent = "01";
+    }
   };
 
   // Tecla P/Esc para pausar en Tetris (portado del prototipo): se maneja
@@ -382,7 +430,14 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
           </div>
           <div className="hud-stat">
             <div className="l">Puntuación</div>
-            <div className="v">{score.toLocaleString("es-ES")}</div>
+            {MotorJuego ? (
+              <div className="v">{score.toLocaleString("es-ES")}</div>
+            ) : (
+              // Sin expresión de React como hijo a propósito: el tick de
+              // 220ms (ver useEffect de arriba) escribe aquí directo vía
+              // scoreElRef, sin pasar por setState/re-render.
+              <div className="v" ref={scoreElRef} />
+            )}
           </div>
           <div className="hud-stat lives">
             <div className="l">Vidas</div>
@@ -390,7 +445,11 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
           </div>
           <div className="hud-stat level">
             <div className="l">Nivel</div>
-            <div className="v">{String(level).padStart(2, "0")}</div>
+            {MotorJuego ? (
+              <div className="v">{String(level).padStart(2, "0")}</div>
+            ) : (
+              <div className="v" ref={levelElRef} />
+            )}
           </div>
           {game.id === "tetris" && (
             <div className="hud-stat">
@@ -420,6 +479,7 @@ export default function JugarClient({ game, mejorGlobal }: { game: Game; mejorGl
       <div style={{ display: "flex", gap: 24, alignItems: "flex-start", flexWrap: "wrap" }}>
         <div className="crt" style={{ flex: "1 1 480px", minWidth: 0 }}>
           <div className="crt-screen">
+            <FpsOverlay />
             {MotorJuego ? (
               <MotorJuego
                 key={gameKey}
