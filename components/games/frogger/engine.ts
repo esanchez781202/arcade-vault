@@ -190,6 +190,16 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
   // cada ronda nueva) — evita puntuar de nuevo el mismo avance tras morir.
   let bestRow: number;
   let skin: SkinBaseId = "clasico";
+  // Color de tortuga sumergida: depende solo de la paleta activa, no del
+  // frame. Se recalcula una vez por cambio de skin (setSkin) en vez de
+  // llamar hexARgba por cada tortuga sumergida y por frame en drawLanes.
+  let turtleSubmergedColor: string;
+  // Fondo precocinado (zonas + rejilla): estático mientras no cambie la
+  // skin, así que se pinta una sola vez en un canvas fuera de pantalla y
+  // draw() solo hace drawImage(). Se invalida comparando contra la skin
+  // con la que se construyó.
+  let bgCanvas: HTMLCanvasElement | null = null;
+  let bgCanvasSkin: SkinBaseId | null = null;
 
   const startCol = Math.floor(COLS / 2);
 
@@ -392,12 +402,12 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     return p.entities.zonaCarretera;
   }
 
-  function drawBackground(p: Palette) {
-    ctx.fillStyle = p.bg;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+  function paintBackground(target: CanvasRenderingContext2D, p: Palette) {
+    target.fillStyle = p.bg;
+    target.fillRect(0, 0, CANVAS_W, CANVAS_H);
     for (let row = 0; row < ROWS; row++) {
-      ctx.fillStyle = zoneColor(row, p);
-      ctx.fillRect(OFFSET_X, OFFSET_Y + row * CELL, BOARD_W, CELL);
+      target.fillStyle = zoneColor(row, p);
+      target.fillRect(OFFSET_X, OFFSET_Y + row * CELL, BOARD_W, CELL);
     }
     // Rejilla sutil: "transparent" en clasico (sin dibujo real). Puntos de
     // 2x2px en las intersecciones cada 2 celdas, no líneas completas — con
@@ -405,13 +415,29 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     // confunde con un elemento jugable de bajo contraste (mismo problema
     // resuelto en snake/engine.ts, ver games-with-themes.md).
     if (p.grid !== "transparent") {
-      ctx.fillStyle = p.grid;
+      target.fillStyle = p.grid;
       for (let col = 0; col <= COLS; col += 2) {
         for (let row = 0; row <= ROWS; row += 2) {
-          ctx.fillRect(OFFSET_X + col * CELL - 1, OFFSET_Y + row * CELL - 1, 2, 2);
+          target.fillRect(OFFSET_X + col * CELL - 1, OFFSET_Y + row * CELL - 1, 2, 2);
         }
       }
     }
+  }
+
+  function drawBackground(p: Palette) {
+    if (!bgCanvas || bgCanvasSkin !== skin) {
+      const canvas = document.createElement("canvas");
+      canvas.width = CANVAS_W;
+      canvas.height = CANVAS_H;
+      const bgCtx = canvas.getContext("2d");
+      if (bgCtx) {
+        paintBackground(bgCtx, p);
+        bgCanvas = canvas;
+        bgCanvasSkin = skin;
+      }
+    }
+    if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0);
+    else paintBackground(ctx, p);
   }
 
   function drawGoals(p: Palette) {
@@ -435,7 +461,10 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     }
   }
 
-  function drawVehicle(e: Entity, y: number, p: Palette) {
+  // Cuerpo del vehículo (fillRect, no requiere beginPath): se dibuja por
+  // entidad porque el color depende del tipo. Las ruedas, en cambio, se
+  // agrupan por carril en drawLaneWheels (mismo fillStyle siempre).
+  function drawVehicleBody(e: Entity, y: number, p: Palette) {
     const x = OFFSET_X + e.col * CELL;
     const w = e.width * CELL;
     ctx.fillStyle = e.type === "truck" ? p.entities.camion : p.danger;
@@ -444,44 +473,75 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
       ctx.fillStyle = p.entities.camionCabina;
       ctx.fillRect(x + w - CELL * 0.6, y + 2, CELL * 0.5, CELL - 8);
     }
+  }
+
+  function drawLaneWheels(lane: Lane, y: number, p: Palette) {
     ctx.fillStyle = p.entities.rueda;
     ctx.beginPath();
-    ctx.arc(x + 10, y + CELL - 8, 5, 0, Math.PI * 2);
-    ctx.arc(x + w - 10, y + CELL - 8, 5, 0, Math.PI * 2);
+    for (const e of lane.entities) {
+      if (e.col + e.width < 0 || e.col > COLS) continue;
+      const x = OFFSET_X + e.col * CELL;
+      const w = e.width * CELL;
+      ctx.arc(x + 10, y + CELL - 8, 5, 0, Math.PI * 2);
+      ctx.arc(x + w - 10, y + CELL - 8, 5, 0, Math.PI * 2);
+    }
     ctx.fill();
   }
 
-  function drawRiverEntity(e: Entity, y: number, p: Palette) {
+  // Cuerpo del tronco (roundRect, un beginPath por tronco porque cada uno
+  // tiene su propia geometría): las líneas divisorias y las tortugas, en
+  // cambio, comparten fillStyle/strokeStyle dentro de un carril y se
+  // agrupan en drawLaneLogLines/drawLaneTurtles.
+  function drawLogBody(e: Entity, y: number, p: Palette) {
     const x = OFFSET_X + e.col * CELL;
     const w = e.width * CELL;
-    if (e.type === "log") {
-      ctx.fillStyle = p.entities.tronco;
-      ctx.beginPath();
-      ctx.roundRect(x + 1, y + 8, w - 2, CELL - 16, 8);
-      ctx.fill();
-      ctx.strokeStyle = p.entities.troncoLinea;
-      ctx.lineWidth = 1;
+    ctx.fillStyle = p.entities.tronco;
+    ctx.beginPath();
+    ctx.roundRect(x + 1, y + 8, w - 2, CELL - 16, 8);
+    ctx.fill();
+  }
+
+  function drawLaneLogLines(lane: Lane, y: number, p: Palette) {
+    ctx.strokeStyle = p.entities.troncoLinea;
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (const e of lane.entities) {
+      if (e.type !== "log") continue;
+      if (e.col + e.width < 0 || e.col > COLS) continue;
+      const x = OFFSET_X + e.col * CELL;
       for (let i = 1; i < e.width; i++) {
-        ctx.beginPath();
         ctx.moveTo(x + i * CELL, y + 8);
         ctx.lineTo(x + i * CELL, y + CELL - 8);
-        ctx.stroke();
       }
-    } else {
-      ctx.fillStyle = e.submerged ? hexARgba(p.entities.tortuga, 0.25) : p.entities.tortuga;
-      for (let i = 0; i < e.width; i++) {
-        ctx.beginPath();
-        ctx.ellipse(
-          x + i * CELL + CELL / 2,
-          y + CELL / 2,
-          CELL * 0.4,
-          CELL * 0.32,
-          0,
-          0,
-          Math.PI * 2,
-        );
-        ctx.fill();
+    }
+    ctx.stroke();
+  }
+
+  function drawLaneTurtles(lane: Lane, y: number, p: Palette) {
+    for (const submergedPass of [true, false]) {
+      let started = false;
+      for (const e of lane.entities) {
+        if (e.type !== "turtle" || Boolean(e.submerged) !== submergedPass) continue;
+        if (e.col + e.width < 0 || e.col > COLS) continue;
+        if (!started) {
+          ctx.fillStyle = submergedPass ? turtleSubmergedColor : p.entities.tortuga;
+          ctx.beginPath();
+          started = true;
+        }
+        const x = OFFSET_X + e.col * CELL;
+        for (let i = 0; i < e.width; i++) {
+          ctx.ellipse(
+            x + i * CELL + CELL / 2,
+            y + CELL / 2,
+            CELL * 0.4,
+            CELL * 0.32,
+            0,
+            0,
+            Math.PI * 2,
+          );
+        }
       }
+      if (started) ctx.fill();
     }
   }
 
@@ -491,8 +551,14 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
       const isRoad = lane.row >= ROW_ROAD_TOP && lane.row <= ROW_ROAD_BOT;
       for (const e of lane.entities) {
         if (e.col + e.width < 0 || e.col > COLS) continue;
-        if (isRoad) drawVehicle(e, y, p);
-        else drawRiverEntity(e, y, p);
+        if (isRoad) drawVehicleBody(e, y, p);
+        else if (e.type === "log") drawLogBody(e, y, p);
+      }
+      if (isRoad) {
+        drawLaneWheels(lane, y, p);
+      } else {
+        drawLaneLogLines(lane, y, p);
+        drawLaneTurtles(lane, y, p);
       }
     }
   }
@@ -554,8 +620,19 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     drawHud(p);
   }
 
+  // Objeto único reutilizado por getState() (causa #6): evita alojar un
+  // literal nuevo cada frame. FroggerGame.tsx hace una copia antes de
+  // guardarla en lastReportedRef — si guardara esta misma referencia,
+  // prev y state serían siempre el mismo objeto y reportIfChanged nunca
+  // detectaría un cambio.
+  const stateOut: FroggerEngineState = { score: 0, lives: START_LIVES, level: 1, state: "playing" };
+
   function getState(): FroggerEngineState {
-    return { score, lives, level, state };
+    stateOut.score = score;
+    stateOut.lives = lives;
+    stateOut.level = level;
+    stateOut.state = state;
+    return stateOut;
   }
 
   function forceGameOver() {
@@ -564,8 +641,10 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
 
   function setSkin(s: SkinBaseId) {
     skin = s;
+    turtleSubmergedColor = hexARgba(FROGGER_SKINS[s].entities.tortuga, 0.25);
   }
 
+  setSkin(skin);
   initGame();
 
   return { update, draw, getState, forceGameOver, setSkin };

@@ -560,8 +560,27 @@ export function createEngine(ctx: CanvasRenderingContext2D, nextCtx: CanvasRende
         drawBlock(nextCtx, offX + c, offY + r, shape[r][c], NEXT_BLOCK, 0, 0);
   }
 
+  // Objeto único reutilizado por getState() (SPEC 12, causa #6): evita
+  // alojar un literal nuevo cada frame. TetrisGame.tsx hace una copia
+  // antes de guardarla en lastReportedRef — si guardara esta misma
+  // referencia, prev y state serían siempre el mismo objeto y
+  // reportIfChanged nunca detectaría un cambio.
+  const stateOut: TetrisEngineState = {
+    score: 0,
+    lives: 0,
+    level: 1,
+    lines: 0,
+    maxCombo: 0,
+    state: "playing",
+  };
+
   function getState(): TetrisEngineState {
-    return { score, lives: 0, level, lines, maxCombo, state };
+    stateOut.score = score;
+    stateOut.level = level;
+    stateOut.lines = lines;
+    stateOut.maxCombo = maxCombo;
+    stateOut.state = state;
+    return stateOut;
   }
 
   function forceGameOver() {

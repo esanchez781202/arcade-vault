@@ -114,11 +114,17 @@ a {
   animation: gridscroll 8s linear infinite;
   opacity: 0.55;
 }
+/* Anima transform (compositor) en vez de background-position (repaint):
+   el desplazamiento de 60px coincide con el tile de 60px del fondo, así
+   que el salto de "to" a "from" en el loop es imperceptible — igual que
+   antes con background-position. El overhang de left/right/bottom (-10%)
+   ya cubre el margen necesario para que la traslación no exponga bordes. */
 @keyframes gridscroll {
+  from {
+    transform: perspective(600px) rotateX(60deg) translate3d(0, 0, 0);
+  }
   to {
-    background-position:
-      0 60px,
-      0 60px;
+    transform: perspective(600px) rotateX(60deg) translate3d(0, 60px, 0);
   }
 }
 .av-bg::after {
@@ -128,11 +134,20 @@ a {
   inset: 0;
   background-image: repeating-linear-gradient(
     to bottom,
-    rgba(255, 255, 255, 0.03) 0 1px,
+    rgba(255, 255, 255, 0.06) 0 1px,
     transparent 1px 3px
   );
-  mix-blend-mode: overlay;
-  opacity: 0.6;
+  opacity: 0.35;
+}
+
+/* Accesibilidad (SPEC 12): detiene toda animación infinita del sitio para
+   quien prefiere motion reducido, sin tocar transiciones cortas de hover. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-play-state: paused !important;
+  }
 }
 
 .av-noise {
@@ -1080,12 +1095,14 @@ a {
     inset 0 0 20px rgba(0, 245, 255, 0.15);
 }
 .crt-screen::after {
+  /* Sin mix-blend-mode: para una fuente negra pura (0,0,0), "multiply" y el
+     alpha-blend normal dan el mismo resultado matemático — (1-a)*backdrop —
+     así que quitar el blend mode no cambia el oscurecimiento percibido. */
   content: "";
   position: absolute;
   inset: 0;
   background: repeating-linear-gradient(0deg, rgba(0, 0, 0, 0.18) 0 2px, transparent 2px 4px);
   pointer-events: none;
-  mix-blend-mode: multiply;
 }
 .crt-screen::before {
   content: "";
@@ -1342,8 +1359,18 @@ a {
     linear-gradient(to bottom, rgba(0, 245, 255, 0.4) 1px, transparent 1px) 0 0/40px 40px;
   transform: perspective(300px) rotateX(70deg);
   transform-origin: top;
-  animation: gridscroll 4s linear infinite;
+  animation: gridscroll-arena 4s linear infinite;
   opacity: 0.7;
+}
+/* Geometría propia (perspective/rotateX distintos de .av-bg::before): no
+   puede compartir @keyframes gridscroll, que ya quedó fijado a 600px/60deg. */
+@keyframes gridscroll-arena {
+  from {
+    transform: perspective(300px) rotateX(70deg) translate3d(0, 0, 0);
+  }
+  to {
+    transform: perspective(300px) rotateX(70deg) translate3d(0, 40px, 0);
+  }
 }
 .game-arena .player-ship {
   position: absolute;
