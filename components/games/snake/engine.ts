@@ -171,22 +171,45 @@ export function createEngine(ctx: CanvasRenderingContext2D, spriteImage: HTMLIma
   // no debe competir en contraste con las formas reales del juego). Puntos
   // espaciados cada 4 celdas mantienen la referencia estructural con una
   // superficie total muy por debajo del umbral de medición.
-  function drawGrid(gridColor: string) {
-    if (gridColor === "transparent") return;
-    ctx.fillStyle = gridColor;
-    for (let x = 0; x <= COLS; x += 4) {
-      for (let y = 0; y <= ROWS; y += 4) {
-        ctx.fillRect(x * CELL - 1, y * CELL - 1, 2, 2);
+  //
+  // Fondo + rejilla precocinados (SPEC 12 / auditoría performance-auditor):
+  // ambos son estáticos mientras la skin no cambia, así que se pintan una
+  // sola vez en un canvas fuera del DOM (`bgCanvas`) y `draw()` los vuelca
+  // con un único `drawImage()` en vez de 1 `fillRect` + hasta 88 `fillRect`
+  // de rejilla por frame.
+  let bgCanvas: HTMLCanvasElement | null = null;
+  let bgCanvasSkin: SkinBaseId | null = null;
+
+  function paintBackground(s: SkinBaseId) {
+    if (!bgCanvas) {
+      bgCanvas = document.createElement("canvas");
+      bgCanvas.width = CANVAS_W;
+      bgCanvas.height = CANVAS_H;
+    }
+    const bgCtx = bgCanvas.getContext("2d");
+    if (!bgCtx) return;
+    const p = SNAKE_SKINS[s];
+    bgCtx.fillStyle = p.bg;
+    bgCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+    if (p.grid !== "transparent") {
+      bgCtx.fillStyle = p.grid;
+      for (let x = 0; x <= COLS; x += 4) {
+        for (let y = 0; y <= ROWS; y += 4) {
+          bgCtx.fillRect(x * CELL - 1, y * CELL - 1, 2, 2);
+        }
       }
     }
+    bgCanvasSkin = s;
+  }
+
+  function drawBackground() {
+    if (bgCanvasSkin !== skin) paintBackground(skin);
+    if (bgCanvas) ctx.drawImage(bgCanvas, 0, 0);
   }
 
   function draw() {
     const p = SNAKE_SKINS[skin];
-    ctx.fillStyle = p.bg;
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-    drawGrid(p.grid);
+    drawBackground();
 
     if (p.entities.fondoFruta !== "transparent") {
       ctx.fillStyle = p.entities.fondoFruta;
@@ -208,19 +231,32 @@ export function createEngine(ctx: CanvasRenderingContext2D, spriteImage: HTMLIma
       );
     });
 
-    snake.forEach((segment, i) => {
-      ctx.fillStyle = i === 0 ? p.accent : p.inkDim;
-      const pad = 1.5;
+    // Agrupación de draw calls (SPEC 12 / auditoría performance-auditor): la
+    // cabeza (color `accent`) es siempre un único segmento; el resto del
+    // cuerpo comparte `inkDim`, así que se agrupan en un único
+    // `beginPath()`+`fill()` en vez de uno por segmento.
+    const pad = 1.5;
+    const head = snake[0];
+    ctx.fillStyle = p.accent;
+    ctx.beginPath();
+    ctx.roundRect(head.x * CELL + pad, head.y * CELL + pad, CELL - pad * 2, CELL - pad * 2, 4);
+    ctx.fill();
+
+    if (snake.length > 1) {
+      ctx.fillStyle = p.inkDim;
       ctx.beginPath();
-      ctx.roundRect(
-        segment.x * CELL + pad,
-        segment.y * CELL + pad,
-        CELL - pad * 2,
-        CELL - pad * 2,
-        4,
-      );
+      for (let i = 1; i < snake.length; i++) {
+        const segment = snake[i];
+        ctx.roundRect(
+          segment.x * CELL + pad,
+          segment.y * CELL + pad,
+          CELL - pad * 2,
+          CELL - pad * 2,
+          4,
+        );
+      }
       ctx.fill();
-    });
+    }
   }
 
   // Objeto único reutilizado por getState() (SPEC 12, causa #6): evita
