@@ -9,7 +9,7 @@ invocación, nunca se procesan varios a la vez. Umbral (SPEC 12): ≥ 58 FPS med
 | frogger   | —                   | —            | —                      | —                | SPEC 12 (#3,#4,#5,#6)                   | 2026-10-06 |
 | asteroids | n/a (no se re-midió el pre-Fase 3; ver notas) | n/a | 60 FPS con CSS transversal / 60 FPS sin CSS transversal | 16.8ms con CSS / 16.8ms sin CSS | #3 (hexARgba precalculado en partículas/overlay), #4 (agrupación de balas), #6 (filterInPlace + scratch de asteroides nuevos, sin new Array por frame) — aplicados en sesión previa (commit `6046c56`). Remedición 2026-10-08 en entorno verificado limpio (0 servidores `next dev` zombis en 3000-3999, confirmado con netstat antes de arrancar): asteroids da 60/60/16.8ms de forma estable en dos corridas independientes, igual con y sin el CSS transversal deshabilitado. Control con FROGGER en la misma sesión: 55-60 FPS con CSS (p95 16.7-33.3ms) y 43-60 FPS sin CSS según la corrida (ruido del entorno de medición, no del motor). Asteroids igualó o superó a FROGGER en todas las corridas — PASS relativo a FROGGER y PASS absoluto (≥58 FPS medio, p95≤20ms). No se aplicaron cambios de código en esta sesión: el trabajo de Fase 3 ya hecho es suficiente. | 2026-10-08 |
 | tetris    | 31 FPS              | 50ms         | 32 FPS                 | 50ms             | causas #2,#3 (ver nota)                 | 2026-10-07 |
-| arkanoid  | —                   | —            | —                      | —                | —                                        | —          |
+| arkanoid  | 30 (con CSS) / 49 (sin CSS) | 50ms (con CSS) / 33.4ms (sin CSS) | — | — | ninguno (ver nota) | 2026-10-07 |
 | snake     | —                   | —            | —                      | —                | —                                        | —          |
 
 ## Nota — tetris (2026-10-07)
@@ -41,3 +41,26 @@ cada celda con 2 `fillRect` directos, sin `beginPath()`/`stroke()` por entidad, 
 margen de mejora era marginal frente al coste de CSS medido arriba; agrupar las 4 skins sin
 romper su aspecto (glow de `neon`, crosshatch de `pixel`) habría sido un cambio extenso para
 un beneficio no demostrado por la medición.
+
+## Nota — arkanoid (2026-10-07)
+
+`performance-auditor` sobre `arkanoid`, remedición en aislamiento (un único worktree, sin
+Playwright headless paralelo en otras 3 instancias): el entorno se validó fiable antes de
+medir (techo de `requestAnimationFrame` puro sin canvas: 60.4 FPS en este navegador/máquina,
+frente a los ~28 FPS contaminados de la invocación anterior). Con el CSS transversal del
+reproductor activo (`.av-bg::before`/`::after` con `gridscroll`/scanlines, `backdrop-filter:
+blur(8px)` en `.av-nav`) ARKANOID midió 30 FPS medio / p95 50ms — muy por debajo del umbral.
+Deshabilitando ese CSS vía `page.addStyleTag` (sin tocar `app/globals.css`, `*, *::before,
+*::after { animation: none !important }` + `backdrop-filter: none` en `.av-nav`) subió a 49
+FPS medio / p95 33.4ms — mismo patrón que confirmó la sesión de `tetris`. Para aislar si el
+resto de la caída (49 vs. 58) era un problema del motor de ARKANOID, se remidió FROGGER (ya
+optimizado en SPEC 12) bajo el mismo arnés en la misma sesión: 35 FPS medio con CSS / 49 FPS
+medio sin CSS, p95 33.4ms — **idéntico** al resultado de ARKANOID sin CSS. Conclusión: el
+motor de ARKANOID ya rinde al mismo nivel que el motor de referencia ya optimizado; el
+remanente hasta 58 FPS/p95 20ms no es atribuible al código de `engine.ts`/`ArkanoidGame.tsx`
+de ARKANOID (ninguna de las 6 causas de SPEC 12 aplica; `getState()` ya reutiliza `stateOut`
+y el wrapper ya copia antes de `lastReportedRef`), sino al CSS transversal del reproductor y
+a un techo adicional del propio arnés de medición (Playwright headless) que afecta por igual
+a un motor ya optimizado. Aplicar un refactor de `engine.ts` aquí habría sido optimizar a
+ciegas contra un síntoma que no está en el motor. No se tocó ningún archivo de
+`components/games/arkanoid/`.
