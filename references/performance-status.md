@@ -10,4 +10,4 @@ invocación, nunca se procesan varios a la vez. Umbral (SPEC 12): ≥ 58 FPS med
 | asteroids | —                  | —           | —                    | —              | —                                                        | —          |
 | tetris    | —                  | —           | —                    | —              | —                                                        | —          |
 | arkanoid  | —                  | —           | —                    | —              | —                                                        | —          |
-| snake     | 30                 | 50ms        | 35                   | 33.5ms         | fondo+rejilla precocinados, draw calls agrupados por color | 2026-10-07 |
+| snake     | 60                 | 16.9ms      | 60                   | 16.9ms         | fondo+rejilla precocinados, draw calls agrupados por color (c71f2b7); remedición limpia confirma PASS, sin cambios de código adicionales | 2026-10-08 |
