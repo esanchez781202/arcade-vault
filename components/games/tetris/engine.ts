@@ -79,6 +79,20 @@ function hexToRgb(hex: string): [number, number, number] {
   ];
 }
 
+// Memoiza hexToRgb por color (SPEC 12, causa #3): las skins "neon"/"pixel" lo
+// invocaban en cada drawBlock() — hasta 200 veces por frame — para un
+// resultado que solo depende del string hex, ya fijo por paleta. Se calcula
+// una sola vez la primera vez que se pide cada color y se reutiliza siempre.
+const rgbCache = new Map<string, [number, number, number]>();
+function cachedHexToRgb(hex: string): [number, number, number] {
+  let rgb = rgbCache.get(hex);
+  if (!rgb) {
+    rgb = hexToRgb(hex);
+    rgbCache.set(hex, rgb);
+  }
+  return rgb;
+}
+
 type DrawBlockFn = (
   ctx: CanvasRenderingContext2D,
   x: number,
@@ -173,7 +187,7 @@ const SKINS: Record<TetrisSkin, SkinDef> = {
       ctx.globalAlpha = a;
       ctx.shadowBlur = a < 0.5 ? 8 : 15;
       ctx.shadowColor = color;
-      const [r, g, b] = hexToRgb(color);
+      const [r, g, b] = cachedHexToRgb(color);
       ctx.fillStyle = `rgba(${r},${g},${b},0.55)`;
       ctx.fillRect(offsetX + x * size + 1, offsetY + y * size + 1, size - 2, size - 2);
       ctx.strokeStyle = color;
@@ -214,7 +228,7 @@ const SKINS: Record<TetrisSkin, SkinDef> = {
       ctx.globalAlpha = alpha ?? 1;
       ctx.fillStyle = color;
       ctx.fillRect(offsetX + x * size + 1, offsetY + y * size + 1, size - 2, size - 2);
-      const [r, g, b] = hexToRgb(color);
+      const [r, g, b] = cachedHexToRgb(color);
       const dark = `rgba(${Math.max(0, r - 60)},${Math.max(0, g - 60)},${Math.max(0, b - 60)},0.7)`;
       ctx.strokeStyle = dark;
       ctx.lineWidth = 0.5;
@@ -337,6 +351,46 @@ export function createEngine(ctx: CanvasRenderingContext2D, nextCtx: CanvasRende
   let maxCombo: number;
   let currentCombo: number;
   let lastClearWasCombo: boolean;
+
+  // Fondo precocinado (SPEC 12, causa #2): letterbox + fondo del tablero +
+  // borde + rejilla no cambian frame a frame, solo al cambiar tema o skin.
+  // Se pintan una vez en un canvas auxiliar fuera del DOM y draw() los
+  // vuelca con un único drawImage() en vez de repetir ~30 beginPath/stroke
+  // y varios fillRect por frame.
+  const bgCanvas = document.createElement("canvas");
+  bgCanvas.width = CANVAS_W;
+  bgCanvas.height = CANVAS_H;
+  const bgCtx = bgCanvas.getContext("2d")!;
+
+  function rebuildBackground() {
+    const colors = THEME_COLORS[theme];
+    const boardBg = SKINS[skin].boardBg ?? colors.canvasBg;
+
+    bgCtx.fillStyle = "#000";
+    bgCtx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+
+    bgCtx.fillStyle = boardBg;
+    bgCtx.fillRect(OFFSET_X, OFFSET_Y, BOARD_W, BOARD_H);
+
+    bgCtx.strokeStyle = colors.gridLine;
+    bgCtx.lineWidth = 1;
+    bgCtx.strokeRect(OFFSET_X, OFFSET_Y, BOARD_W, BOARD_H);
+
+    bgCtx.strokeStyle = colors.gridLine;
+    bgCtx.lineWidth = 0.5;
+    for (let c = 1; c < COLS; c++) {
+      bgCtx.beginPath();
+      bgCtx.moveTo(OFFSET_X + c * BLOCK, OFFSET_Y);
+      bgCtx.lineTo(OFFSET_X + c * BLOCK, OFFSET_Y + ROWS * BLOCK);
+      bgCtx.stroke();
+    }
+    for (let r = 1; r < ROWS; r++) {
+      bgCtx.beginPath();
+      bgCtx.moveTo(OFFSET_X, OFFSET_Y + r * BLOCK);
+      bgCtx.lineTo(OFFSET_X + COLS * BLOCK, OFFSET_Y + r * BLOCK);
+      bgCtx.stroke();
+    }
+  }
 
   function drawBlock(
     context: CanvasRenderingContext2D,
@@ -476,43 +530,12 @@ export function createEngine(ctx: CanvasRenderingContext2D, nextCtx: CanvasRende
   // El HUD (SCORE/LINES/LEVEL) del original vivía en el sidebar DOM, fuera del
   // canvas: no hay HUD que retirar del draw() portado. El HUD React del
   // reproductor lo sustituye vía getState().
-  function drawGrid() {
-    ctx.strokeStyle = THEME_COLORS[theme].gridLine;
-    ctx.lineWidth = 0.5;
-    for (let c = 1; c < COLS; c++) {
-      ctx.beginPath();
-      ctx.moveTo(OFFSET_X + c * BLOCK, OFFSET_Y);
-      ctx.lineTo(OFFSET_X + c * BLOCK, OFFSET_Y + ROWS * BLOCK);
-      ctx.stroke();
-    }
-    for (let r = 1; r < ROWS; r++) {
-      ctx.beginPath();
-      ctx.moveTo(OFFSET_X, OFFSET_Y + r * BLOCK);
-      ctx.lineTo(OFFSET_X + COLS * BLOCK, OFFSET_Y + r * BLOCK);
-      ctx.stroke();
-    }
-  }
-
   function draw() {
-    const colors = THEME_COLORS[theme];
-    // La skin puede fijar su propio fondo (neon/pastel/pixel); "retro" no
-    // trae uno propio y usa el fondo del tema claro/oscuro, igual que el
-    // prototipo (`--canvas-bg` vía CSS cuando `activeSkin.boardBg` es null).
-    const boardBg = SKINS[skin].boardBg ?? colors.canvasBg;
-
-    // Barras de letterbox: negras siempre, igual que el resto del marco CRT.
-    ctx.fillStyle = "#000";
-    ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
-
-    // Área jugable: fondo (skin o tema) y rejilla según el tema.
-    ctx.fillStyle = boardBg;
-    ctx.fillRect(OFFSET_X, OFFSET_Y, BOARD_W, BOARD_H);
-
-    ctx.strokeStyle = colors.gridLine;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(OFFSET_X, OFFSET_Y, BOARD_W, BOARD_H);
-
-    drawGrid();
+    // Letterbox + fondo del tablero + borde + rejilla: precocinados en
+    // bgCanvas (rebuildBackground()), solo cambian con tema/skin. Un único
+    // drawImage() sustituye el fillRect+strokeRect+29 beginPath/stroke que
+    // se repetían cada frame.
+    ctx.drawImage(bgCanvas, 0, 0);
 
     for (let r = 0; r < ROWS; r++)
       for (let c = 0; c < COLS; c++) drawBlock(ctx, c, r, board[r][c], BLOCK, OFFSET_X, OFFSET_Y);
@@ -589,10 +612,12 @@ export function createEngine(ctx: CanvasRenderingContext2D, nextCtx: CanvasRende
 
   function setTheme(t: TetrisTheme) {
     theme = t;
+    rebuildBackground();
   }
 
   function setSkin(s: TetrisSkin) {
     skin = s;
+    rebuildBackground();
   }
 
   /** Reinicia la partida con el nivel inicial elegido (selector "NIVEL INICIAL"). */
@@ -600,6 +625,7 @@ export function createEngine(ctx: CanvasRenderingContext2D, nextCtx: CanvasRende
     initGame(startLevel);
   }
 
+  rebuildBackground();
   initGame();
 
   return { update, draw, getState, forceGameOver, setTheme, setSkin, setStartLevel };
