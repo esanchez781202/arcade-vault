@@ -50,25 +50,30 @@ App Router.
 
 **Rutas** (`app/`):
 
-| Ruta                | Archivo                                 | Notas                                                 |
-| ------------------- | --------------------------------------- | ----------------------------------------------------- |
-| `/`                 | `page.tsx` + `HomeClient.tsx`           | Home; animaciones de scroll con `useReveal()`         |
-| `/biblioteca`       | `biblioteca/` + `BibliotecaClient.tsx`  | Catálogo desde Supabase, filtros por categoría        |
-| `/juego/[id]`       | `juego/[id]/page.tsx`                   | Ficha de detalle (incl. `difficulty`)                 |
-| `/juego/[id]/jugar` | `juego/[id]/jugar/` + `JugarClient.tsx` | Reproductor; `actions.ts` guarda el score             |
-| `/salon`            | `salon/page.tsx`                        | Hall of Fame; `actions.ts` envuelve la capa de datos  |
-| `/acerca-de`        | `acerca-de/page.tsx`                    | About + formulario de contacto; `actions.ts` → Resend |
-| `/acceso`           | `acceso/page.tsx`                       | Login **falso** (ver Sesión)                          |
+| Ruta                      | Archivo                                 | Notas                                                 |
+| ------------------------- | --------------------------------------- | ----------------------------------------------------- |
+| `/`                       | `page.tsx` + `HomeClient.tsx`           | Home; animaciones de scroll con `useReveal()`         |
+| `/biblioteca`             | `biblioteca/` + `BibliotecaClient.tsx`  | Catálogo desde Supabase, filtros por categoría        |
+| `/juego/[id]`             | `juego/[id]/page.tsx`                   | Ficha de detalle (incl. `difficulty`)                 |
+| `/juego/[id]/jugar`       | `juego/[id]/jugar/` + `JugarClient.tsx` | Reproductor; `actions.ts` guarda el score             |
+| `/salon`                  | `salon/page.tsx`                        | Hall of Fame; `actions.ts` envuelve la capa de datos  |
+| `/acerca-de`              | `acerca-de/page.tsx`                    | About + formulario de contacto; `actions.ts` → Resend |
+| `/acceso`                 | `acceso/page.tsx`                       | Login real con Supabase Auth (ver Sesión)             |
+| `/auth/callback`          | `auth/callback/route.ts`                | Route Handler: intercambia `code` por sesión (PKCE)   |
+| `/restablecer-contrasena` | `restablecer-contrasena/page.tsx`       | Nueva contraseña tras el enlace de recuperación       |
 
 Layout global: `components/nav.tsx`, `components/footer.tsx`, `components/session-provider.tsx`;
 fuentes (Press Start 2P, JetBrains Mono, Courier Prime) self-hosted vía `next/font/google`
 exponiendo variables CSS que consume `app/globals.css` (~2.8K líneas, portado de
 `references/templates/styles.css`).
 
-**Sesión.** `SessionProvider` (Context) con `localStorage` clave `av_user`. Es un login
-simulado: `/acceso` acepta cualquier usuario y lo pone en mayúsculas (máx. 10 chars).
-**No usa Supabase Auth** todavía; `proxy.ts` solo refresca la sesión de Supabase si
-existen las env vars, sin rutas protegidas ni redirecciones.
+**Sesión.** `SessionProvider` (Context) hidratado desde Supabase Auth real
+(`crearClienteSupabase().auth.getSession()` + `onAuthStateChange`), sin `localStorage`.
+`/acceso` soporta email+contraseña (`signInWithPassword`/`signUp`), OAuth Google/GitHub
+(`signInWithOAuth`) y recuperación de contraseña (`resetPasswordForEmail` +
+`/restablecer-contrasena`), con confirmación de email obligatoria (SPEC 13). `proxy.ts`
+refresca la sesión de Supabase en cada request si existen las env vars, sin rutas
+protegidas ni redirecciones.
 
 ## Supabase
 
@@ -83,9 +88,12 @@ existen las env vars, sin rutas protegidas ni redirecciones.
   y una migración de siembra por juego real.
 - **`games` solo contiene juegos con motor real jugable.** Un juego se siembra en la
   misma spec que implementa su motor, no antes.
-- Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, y `RESEND_API_KEY` para el correo de
-  contacto (`lib/email.ts`, solo servidor). Viven en `.env.local`, no versionado.
+- Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+  y `RESEND_API_KEY`/`CONTACT_FROM_EMAIL`/`CONTACT_TO_EMAIL` para el correo de contacto
+  (`lib/email.ts`, solo servidor). Viven en `.env.local`, no versionado.
+- El SMTP de Supabase Auth (correos de confirmación/recuperación) se configura en el
+  panel (Authentication → Emails → SMTP Settings), no en `.env.local`: reusa la misma
+  cuenta Resend. Ver SPEC 13.
 
 ## Motores de juego
 

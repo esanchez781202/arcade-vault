@@ -88,11 +88,12 @@ export default function Auth() {
 
     setCargando(true);
     const supabase = crearClienteSupabase();
-    const { error: errorSupabase } = await supabase.auth.signUp({
+    const { data, error: errorSupabase } = await supabase.auth.signUp({
       email,
       password: pass,
       options: {
         data: { display_name: (user || "PLAYER1").toUpperCase().slice(0, 10) },
+        emailRedirectTo: `${location.origin}/auth/callback`,
       },
     });
     setCargando(false);
@@ -100,7 +101,32 @@ export default function Auth() {
       setError(errorSupabase.message);
       return;
     }
+    if (data.session) {
+      // Supabase devolvió sesión activa (p. ej. confirmación de email
+      // desactivada en el panel): entra directo, sin pantalla intermedia.
+      router.push("/biblioteca");
+      return;
+    }
+    if (data.user && data.user.identities && data.user.identities.length === 0) {
+      // Respuesta anti-enumeración: el correo ya tiene cuenta. Supabase no
+      // envía nada; se lo decimos en vez de mentir con "revisa tu correo".
+      setError("Ya existe una cuenta con ese correo. Inicia sesión o entra con Google/GitHub.");
+      return;
+    }
     setPantalla("revisa-correo");
+  };
+
+  const reenviarConfirmacion = async () => {
+    setError(null);
+    setCargando(true);
+    const supabase = crearClienteSupabase();
+    const { error: errorSupabase } = await supabase.auth.resend({
+      type: "signup",
+      email,
+      options: { emailRedirectTo: `${location.origin}/auth/callback` },
+    });
+    setCargando(false);
+    if (errorSupabase) setError(errorSupabase.message);
   };
 
   return (
@@ -130,10 +156,28 @@ export default function Auth() {
                 : "Te hemos enviado un enlace para restablecer tu contraseña a "}
               <strong>{email}</strong>
             </p>
+
+            {error && (
+              <div className="mono" style={{ color: "var(--magenta)", fontSize: 12, marginTop: 8 }}>
+                {error}
+              </div>
+            )}
+
+            {pantalla === "revisa-correo" && (
+              <button
+                className="btn ghost"
+                type="button"
+                disabled={cargando}
+                style={{ width: "100%", marginTop: 16 }}
+                onClick={reenviarConfirmacion}
+              >
+                REENVIAR CORREO
+              </button>
+            )}
             <button
               className="btn lg"
               type="button"
-              style={{ width: "100%", marginTop: 16 }}
+              style={{ width: "100%", marginTop: 10 }}
               onClick={volverAIniciarSesion}
             >
               VOLVER A INICIAR SESIÓN
