@@ -1,18 +1,13 @@
 "use client";
 
-// Sesión en memoria (Context) hidratada desde localStorage `av_user`.
-// Portado de references/templates/app.jsx (handleLogin / handleSignOut).
+// Sesión real (Context) hidratada desde Supabase Auth.
 // El primer render siempre es user = null para no desincronizar la
-// hidratación SSR → cliente; el valor de `av_user` se aplica en useEffect.
+// hidratación SSR → cliente; `getSession()` resuelve el valor real en
+// useEffect y `onAuthStateChange` lo mantiene sincronizado después.
 
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-  type ReactNode,
-} from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
+import type { Session, User } from "@supabase/supabase-js";
+import { crearClienteSupabase } from "@/lib/supabase/client";
 
 export interface SessionUser {
   name: string; // en mayúsculas, máx. 10 chars
@@ -20,48 +15,48 @@ export interface SessionUser {
 
 interface SessionValue {
   user: SessionUser | null;
-  login: (u: SessionUser | null) => void;
   signOut: () => void;
 }
 
 const SessionContext = createContext<SessionValue | null>(null);
 
+function derivarNombre(usuario: User): string {
+  const metadata = usuario.user_metadata ?? {};
+  const base =
+    metadata.display_name ??
+    metadata.full_name ??
+    metadata.name ??
+    usuario.email?.split("@")[0] ??
+    "PLAYER1";
+  return String(base).toUpperCase().slice(0, 10);
+}
+
+function sesionAUsuario(session: Session | null): SessionUser | null {
+  return session?.user ? { name: derivarNombre(session.user) } : null;
+}
+
 export function SessionProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<SessionUser | null>(null);
 
   useEffect(() => {
-    try {
-      const raw = localStorage.getItem("av_user");
-      if (raw) setUser(JSON.parse(raw) as SessionUser);
-    } catch {
-      // localStorage no disponible (modo privado): la sesión vive solo en memoria.
-    }
-  }, []);
+    const supabase = crearClienteSupabase();
 
-  const login = useCallback((u: SessionUser | null) => {
-    setUser(u);
-    try {
-      if (u) localStorage.setItem("av_user", JSON.stringify(u));
-      else localStorage.removeItem("av_user");
-    } catch {
-      // sin persistencia: la sesión sigue en memoria.
-    }
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(sesionAUsuario(session));
+    });
+
+    const { data: suscripcion } = supabase.auth.onAuthStateChange((_evento, session) => {
+      setUser(sesionAUsuario(session));
+    });
+
+    return () => suscripcion.subscription.unsubscribe();
   }, []);
 
   const signOut = useCallback(() => {
-    setUser(null);
-    try {
-      localStorage.removeItem("av_user");
-    } catch {
-      // no-op
-    }
+    crearClienteSupabase().auth.signOut();
   }, []);
 
-  return (
-    <SessionContext.Provider value={{ user, login, signOut }}>
-      {children}
-    </SessionContext.Provider>
-  );
+  return <SessionContext.Provider value={{ user, signOut }}>{children}</SessionContext.Provider>;
 }
 
 export function useSession(): SessionValue {

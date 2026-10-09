@@ -12,42 +12,19 @@ Usa siempre `/frontend-design` para diseñar las interfaces de usuario.
 
 ## Agentes
 
-Los subagentes del proyecto viven en `.claude/agents/`.
+Los subagentes del proyecto viven en `.claude/agents/`. Un juego/motor/ruta por invocación
+cada uno (nunca recorren el catálogo completo solos); detalle completo en su propio archivo.
 
 - **`game-planner`** (`.claude/agents/game-planner.md`) — decide _qué_ juego añadir al
-  catálogo, no _cómo_. Invócalo **antes** de `/add-game`, cuando toque elegir un juego nuevo
-  o el usuario pregunte "¿qué añadimos ahora?". Lee `references/implemented-games.md`,
-  `components/games/registry.ts`, `lib/games.ts` (`CATS`), `references/started-games/` y
-  `specs/` para detectar huecos de categoría, y aplica el filtro duro que impone el
-  reproductor: marco CRT 4/3 de un solo canvas, solo teclado (+ click puntual), score como
-  entero único ascendente, motor encapsulable en `engine.ts` sin React. Su memoria entre
-  sesiones es `references/game-suggestions-todo.md` — **el único archivo que modifica**; no
-  escribe specs, código ni migraciones. Handoff: `game-planner` → `/add-game` (spec) →
-  `/spec-impl NN-slug` (implementación).
-- **`game-jam`** (`.claude/agents/game-jam.md`) — a partir de un tema libre del usuario,
-  propone tres juegos nuevos (mismo filtro duro que `game-planner`) y por cada uno escribe
-  **dos specs completas** — `01-core.md` (MVP) y `02-ampliada.md` (con extras) — en
-  `specs/game-jam/<game-id>/`, siguiendo el formato de `specs/07-*.md`/`08-*.md`/`09-*.md` y
-  la receta de `.claude/skills/add-game/template.md`. Son specs `Draft` sin número de
-  `specs/NN-slug.md` asignado — puro material de revisión: no escribe código, no aplica
-  migraciones y nunca elige un ganador entre las tres. Para construir una, el usuario la
-  aprueba a mano, la renombra a `specs/NN-slug.md` y corre `/spec-impl NN-slug`.
-- **`skin-designer`** (`.claude/agents/skin-designer.md`) — aplica los skins `clasico`
-  (default), `retro` y `neon` a **un único juego por invocación**, el que el usuario indique
-  (`asteroids`, `tetris`, `arkanoid` o `snake`); nunca recorre los cuatro motores solo. A
-  diferencia de `game-planner`/`game-jam`, sí escribe código: extrae los colores literales de
-  `engine.ts` a paletas (`components/games/skins.ts` + `<juego>/skins.ts`), diseña las paletas
-  nuevas con `/frontend-design` y verifica su contraste sobre el marco CRT oscuro con
-  Playwright. Su memoria entre sesiones es `references/games-with-themes.md` (qué juego tiene
-  qué skins y desde cuándo). Nunca toca lógica de juego, Supabase ni hace commit.
-- **`mobile-porter`** (`.claude/agents/mobile-porter.md`) — adapta a móvil **una única ruta
-  por invocación**, la que el usuario indique (`/`, `/biblioteca`, `/juego/[id]`,
-  `/juego/[id]/jugar`, `/salon`, `/acceso` o `/acerca-de`); nunca recorre las siete solo. Igual
-  que `skin-designer`, sí escribe código: audita con Playwright en 360×780/390×844 (y 1440×900
-  de control) contra `specs/10-controles-tactiles-movil.md` como contrato vigente, y corrige
-  `app/globals.css` sin alterar el aspecto en desktop. Su memoria entre sesiones es
-  `references/mobile-porting-status.md`. Nunca toca `components/games/`, Supabase ni hace
-  commit; no introduce PWA/manifest/service worker.
+  catálogo (no _cómo_); paso previo a `/add-game`.
+- **`game-jam`** (`.claude/agents/game-jam.md`) — a partir de un tema libre, propone tres
+  juegos y escribe sus specs de borrador en `specs/game-jam/<game-id>/`.
+- **`skin-designer`** (`.claude/agents/skin-designer.md`) — aplica los skins
+  `clasico`/`retro`/`neon` a un motor existente.
+- **`mobile-porter`** (`.claude/agents/mobile-porter.md`) — adapta a móvil una ruta
+  existente.
+- **`performance-auditor`** (`.claude/agents/performance-auditor.md`) — mide y, si procede,
+  optimiza el FPS de un motor existente.
 
 ## Architecture
 
@@ -68,33 +45,37 @@ Nunca bloquea; no reformatees a mano después de editar.
 
 ## Estado del proyecto
 
-Arcade Vault: plataforma web para jugar online y competir en una tabla de puntos.
-Las 9 specs de `specs/` están en estado `Implementado`. El scaffold de
-`create-next-app` ya no existe: la app completa está portada al App Router.
+Arcade Vault: plataforma web para jugar online y competir en una tabla de puntos. La app completa está portada al
+App Router.
 
 **Rutas** (`app/`):
 
-| Ruta                | Archivo                                 | Notas                                                 |
-| ------------------- | --------------------------------------- | ----------------------------------------------------- |
-| `/`                 | `page.tsx` + `HomeClient.tsx`           | Home; animaciones de scroll con `useReveal()`         |
-| `/biblioteca`       | `biblioteca/` + `BibliotecaClient.tsx`  | Catálogo desde Supabase, filtros por categoría        |
-| `/juego/[id]`       | `juego/[id]/page.tsx`                   | Ficha de detalle (incl. `difficulty`)                 |
-| `/juego/[id]/jugar` | `juego/[id]/jugar/` + `JugarClient.tsx` | Reproductor; `actions.ts` guarda el score             |
-| `/salon`            | `salon/page.tsx`                        | Hall of Fame; `actions.ts` envuelve la capa de datos  |
-| `/acerca-de`        | `acerca-de/page.tsx`                    | About + formulario de contacto; `actions.ts` → Resend |
-| `/acceso`           | `acceso/page.tsx`                       | Login **falso** (ver Sesión)                          |
+| Ruta                      | Archivo                                 | Notas                                                 |
+| ------------------------- | --------------------------------------- | ----------------------------------------------------- |
+| `/`                       | `page.tsx` + `HomeClient.tsx`           | Home; animaciones de scroll con `useReveal()`         |
+| `/biblioteca`             | `biblioteca/` + `BibliotecaClient.tsx`  | Catálogo desde Supabase, filtros por categoría        |
+| `/juego/[id]`             | `juego/[id]/page.tsx`                   | Ficha de detalle (incl. `difficulty`)                 |
+| `/juego/[id]/jugar`       | `juego/[id]/jugar/` + `JugarClient.tsx` | Reproductor; `actions.ts` guarda el score             |
+| `/salon`                  | `salon/page.tsx`                        | Hall of Fame; `actions.ts` envuelve la capa de datos  |
+| `/acerca-de`              | `acerca-de/page.tsx`                    | About + formulario de contacto; `actions.ts` → Resend |
+| `/acceso`                 | `acceso/page.tsx`                       | Login real con Supabase Auth (ver Sesión)             |
+| `/auth/callback`          | `auth/callback/route.ts`                | Route Handler: intercambia `code` por sesión (PKCE)   |
+| `/restablecer-contrasena` | `restablecer-contrasena/page.tsx`       | Nueva contraseña tras el enlace de recuperación       |
 
 Layout global: `components/nav.tsx`, `components/footer.tsx`, `components/session-provider.tsx`;
 fuentes (Press Start 2P, JetBrains Mono, Courier Prime) self-hosted vía `next/font/google`
 exponiendo variables CSS que consume `app/globals.css` (~2.8K líneas, portado de
 `references/templates/styles.css`).
 
-**Sesión.** `SessionProvider` (Context) con `localStorage` clave `av_user`. Es un login
-simulado: `/acceso` acepta cualquier usuario y lo pone en mayúsculas (máx. 10 chars).
-**No usa Supabase Auth** todavía; `proxy.ts` solo refresca la sesión de Supabase si
-existen las env vars, sin rutas protegidas ni redirecciones.
+**Sesión.** `SessionProvider` (Context) hidratado desde Supabase Auth real
+(`crearClienteSupabase().auth.getSession()` + `onAuthStateChange`), sin `localStorage`.
+`/acceso` soporta email+contraseña (`signInWithPassword`/`signUp`), OAuth Google/GitHub
+(`signInWithOAuth`) y recuperación de contraseña (`resetPasswordForEmail` +
+`/restablecer-contrasena`), con confirmación de email obligatoria (SPEC 13). `proxy.ts`
+refresca la sesión de Supabase en cada request si existen las env vars, sin rutas
+protegidas ni redirecciones.
 
-## Supabase (SPEC 04/06)
+## Supabase
 
 - Clientes: `lib/supabase/client.ts` (navegador) y `lib/supabase/server.ts`
   (`crearClienteSupabaseServidor()`, instancia nueva por request).
@@ -107,13 +88,15 @@ existen las env vars, sin rutas protegidas ni redirecciones.
   y una migración de siembra por juego real.
 - **`games` solo contiene juegos con motor real jugable.** Un juego se siembra en la
   misma spec que implementa su motor, no antes.
-- Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`,
-  `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, y `RESEND_API_KEY` para el correo de
-  contacto (`lib/email.ts`, solo servidor). Viven en `.env.local`, no versionado.
+- Variables de entorno: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+  y `RESEND_API_KEY`/`CONTACT_FROM_EMAIL`/`CONTACT_TO_EMAIL` para el correo de contacto
+  (`lib/email.ts`, solo servidor). Viven en `.env.local`, no versionado.
+- El SMTP de Supabase Auth (correos de confirmación/recuperación) se configura en el
+  panel (Authentication → Emails → SMTP Settings), no en `.env.local`: reusa la misma
+  cuenta Resend. Ver SPEC 13.
 
-## Motores de juego (SPEC 05, 07, 08, 09, ...)
+## Motores de juego
 
-Cuatro juegos reales portados: `asteroids`, `tetris`, `arkanoid`, `snake`, .... (revisa references/implemented-games.md cuando necesites saber que juegos estan implementados)
 Cada uno vive en `components/games/<juego>/` como par `engine.ts` (lógica sobre canvas,
 sin React) + `<Juego>Game.tsx` (wrapper cliente que sincroniza score/vidas/nivel/estado
 con el HUD).
@@ -160,13 +143,12 @@ fijados en `skills-lock.json` (origen `Klerith/fernando-skills`); `add-game` y
   (`av_user`, `av_scores`); `data.jsx` tiene el catálogo mock; pantallas en
   `biblioteca.jsx`, `detalle.jsx`, `reproductor.jsx`, `auth.jsx`, `salon.jsx`,
   `home-about/`; estilos en `styles.css`.
-- `references/started-games/` — prototipos JS de los juegos de origen
-  (`02-asteroids`, `03-tetris`, `04-arkanoid`) desde los que se portan los motores.
-- `references/source-assets/` — assets crudos (`snake-assets/`) antes de moverse a
+- `references/started-games/`.
+- `references/source-assets/` — assets crudos antes de moverse a
   `public/games/`.
 - `references/game-suggestions-todo.md` — TODO de juegos candidatos; memoria persistente del
   agente `game-planner`. Editable a mano.
-- `references/games-with-themes.md` — qué juego tiene qué skins (`clasico`/`retro`/`neon` y
+- `references/games-with-themes.md` — qué juego tiene qué skins y
   extras); memoria persistente del agente `skin-designer`. Editable a mano.
 - `references/mobile-porting-status.md` — qué ruta está adaptada a móvil y con qué
   verificación (M1-M6); memoria persistente del agente `mobile-porter`. Editable a mano.

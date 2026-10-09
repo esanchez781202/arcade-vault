@@ -10,7 +10,7 @@
 // `createEngine` se pueda instanciar y descartar de forma controlada por
 // React (ver AsteroidsGame.tsx).
 
-import { conGlow, hexARgba, type SkinBaseId, type SkinPalette } from "../skins";
+import { conGlow, type SkinBaseId, type SkinPalette } from "../skins";
 import { ASTEROIDS_SKINS, type AsteroidsRole } from "./skins";
 
 export type AsteroidsGameState = "playing" | "dead" | "gameover";
@@ -39,6 +39,23 @@ const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
   Math.hypot(a.x - b.x, a.y - b.y);
 const rand = (min: number, max: number) => min + Math.random() * (max - min);
 const randInt = (min: number, max: number) => Math.floor(rand(min, max + 1));
+// Parseo hex→rgb aislado para precalcular componentes una vez por skin (ver
+// setSkin en createEngine) en vez de repetirlo dentro del bucle de dibujo.
+const parseHexRgb = (hex: string): [number, number, number] => [
+  parseInt(hex.slice(1, 3), 16),
+  parseInt(hex.slice(3, 5), 16),
+  parseInt(hex.slice(5, 7), 16),
+];
+// Quita en el sitio los elementos marcados `dead`, sin alojar un array nuevo
+// (SPEC 12, causa #6) — sustituye el patrón `arr = arr.filter(...)` que se
+// ejecutaba hasta 4 veces por frame.
+function filterInPlace<T extends { dead: boolean }>(arr: T[]): void {
+  let w = 0;
+  for (let r = 0; r < arr.length; r++) {
+    if (!arr[r].dead) arr[w++] = arr[r];
+  }
+  arr.length = w;
+}
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 const POWERUP_DROP_CHANCE = 0.15;
@@ -70,13 +87,22 @@ class Bullet {
     this.ttl -= dt;
     if (this.ttl <= 0) this.dead = true;
   }
+}
 
-  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
-    ctx.fillStyle = p.entities.bala;
-    ctx.beginPath();
-    ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
-    ctx.fill();
-  }
+// Agrupa el dibujo de todas las balas vivas en un único beginPath()+fill()
+// (SPEC 12, causa #4: draw calls fragmentadas) — todas comparten color y no
+// tienen rotación individual, así que son agrupables sin perder matices
+// visuales, a diferencia de Asteroid/Ship (llevan transform por entidad).
+function drawBullets(
+  ctx: CanvasRenderingContext2D,
+  bullets: Bullet[],
+  p: SkinPalette<AsteroidsRole>,
+) {
+  if (bullets.length === 0) return;
+  ctx.fillStyle = p.entities.bala;
+  ctx.beginPath();
+  for (const b of bullets) ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
+  ctx.fill();
 }
 
 // ── Asteroid ──────────────────────────────────────────────────────────────────
@@ -324,9 +350,14 @@ class Particle {
     if (this.ttl <= 0) this.dead = true;
   }
 
-  draw(ctx: CanvasRenderingContext2D, p: SkinPalette<AsteroidsRole>) {
+  // `rgb` llega precalculado desde setSkin() (ver `parseHexRgb`/`particleRgb`
+  // en createEngine): el alpha sí depende de `ttl/life` por partícula y por
+  // frame (no cacheable por skin, excepción ya documentada en SPEC 12), pero
+  // el parseo hex→rgb que antes hacía `hexARgba` en cada frame ya no es
+  // necesario repetirlo — solo cambia al cambiar de skin.
+  draw(ctx: CanvasRenderingContext2D, rgb: readonly [number, number, number]) {
     const alpha = this.ttl / this.life;
-    ctx.strokeStyle = hexARgba(p.inkDim, alpha);
+    ctx.strokeStyle = `rgba(${rgb[0]},${rgb[1]},${rgb[2]},${alpha})`;
     ctx.lineWidth = 1;
     ctx.beginPath();
     ctx.moveTo(this.x, this.y);
@@ -350,6 +381,14 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
   let powerUpSpawned: boolean;
   let killsSinceSpawn: number;
   let skin: SkinBaseId = "clasico";
+  // Componentes RGB precalculados por skin (SPEC 12, causa #3): evitan
+  // reparsear el hex dentro del bucle de dibujo de partículas/overlay.
+  let particleRgb: [number, number, number] = parseHexRgb(ASTEROIDS_SKINS[skin].inkDim);
+  let hudDimColor = `rgba(${parseHexRgb(ASTEROIDS_SKINS[skin].hud).join(",")},0.65)`;
+  // Scratch reutilizado en update() para los asteroides nuevos por partición
+  // (SPEC 12, causa #6): se vacía con `.length = 0` en vez de alojar un
+  // array literal nuevo cada frame.
+  const newAsteroidsScratch: Asteroid[] = [];
 
   function spawnAsteroids(count: number) {
     const SAFE_DIST = 130;
@@ -411,14 +450,14 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     if (state === "gameover") {
       if (input.shoot) initGame();
       particles.forEach((p) => p.update(dt));
-      particles = particles.filter((p) => !p.dead);
+      filterInPlace(particles);
       return;
     }
 
     if (state === "dead") {
       deadTimer -= dt;
       particles.forEach((p) => p.update(dt));
-      particles = particles.filter((p) => !p.dead);
+      filterInPlace(particles);
       asteroids.forEach((a) => a.update(dt));
       if (deadTimer <= 0) {
         state = "playing";
@@ -438,9 +477,9 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     particles.forEach((p) => p.update(dt));
     powerUps.forEach((p) => p.update(dt));
 
-    bullets = bullets.filter((b) => !b.dead);
-    particles = particles.filter((p) => !p.dead);
-    powerUps = powerUps.filter((p) => !p.dead);
+    filterInPlace(bullets);
+    filterInPlace(particles);
+    filterInPlace(powerUps);
 
     for (const p of powerUps) {
       if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
@@ -450,7 +489,7 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     }
 
     // Bala vs asteroide
-    const newAsteroids: Asteroid[] = [];
+    newAsteroidsScratch.length = 0;
     for (const b of bullets) {
       for (const a of asteroids) {
         if (!a.dead && !b.dead && dist(b, a) < a.radius) {
@@ -458,7 +497,7 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
           a.dead = true;
           score += POINTS[a.size];
           explode(a.x, a.y, a.size * 5);
-          newAsteroids.push(...a.split());
+          newAsteroidsScratch.push(...a.split());
           if (!powerUpSpawned) {
             killsSinceSpawn++;
             const guaranteed = killsSinceSpawn >= 5;
@@ -470,8 +509,9 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
         }
       }
     }
-    asteroids = asteroids.filter((a) => !a.dead).concat(newAsteroids);
-    bullets = bullets.filter((b) => !b.dead);
+    filterInPlace(asteroids);
+    for (const na of newAsteroidsScratch) asteroids.push(na);
+    filterInPlace(bullets);
 
     // Nave vs asteroide
     if (ship.invincible <= 0) {
@@ -495,7 +535,7 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     ctx.font = "bold 46px monospace";
     ctx.fillText(title, W / 2, H / 2 - 18);
     ctx.font = "18px monospace";
-    ctx.fillStyle = hexARgba(p.hud, 0.65);
+    ctx.fillStyle = hudDimColor;
     ctx.fillText(sub, W / 2, H / 2 + 22);
   }
 
@@ -504,10 +544,10 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
     ctx.fillStyle = p.bg;
     ctx.fillRect(0, 0, W, H);
 
-    particles.forEach((particle) => particle.draw(ctx, p));
+    particles.forEach((particle) => particle.draw(ctx, particleRgb));
     asteroids.forEach((a) => a.draw(ctx, p));
     powerUps.forEach((powerUp) => powerUp.draw(ctx, p));
-    bullets.forEach((b) => b.draw(ctx, p));
+    drawBullets(ctx, bullets, p);
     ship.draw(ctx, p);
 
     if (state === "gameover") {
@@ -537,6 +577,9 @@ export function createEngine(ctx: CanvasRenderingContext2D) {
 
   function setSkin(s: SkinBaseId) {
     skin = s;
+    const p = ASTEROIDS_SKINS[s];
+    particleRgb = parseHexRgb(p.inkDim);
+    hudDimColor = `rgba(${parseHexRgb(p.hud).join(",")},0.65)`;
   }
 
   initGame();
