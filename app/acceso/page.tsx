@@ -8,6 +8,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { crearClienteSupabase } from "@/lib/supabase/client";
 
+const PASSWORD_REGEX = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[^A-Za-z0-9]).{8,}$/;
+
 export default function Auth() {
   const router = useRouter();
 
@@ -81,8 +83,10 @@ export default function Auth() {
       setError("Las contraseñas no coinciden.");
       return;
     }
-    if (pass.length < 6) {
-      setError("La contraseña debe tener al menos 6 caracteres.");
+    if (!PASSWORD_REGEX.test(pass)) {
+      setError(
+        "La contraseña debe tener mínimo 8 caracteres e incluir mayúsculas, minúsculas, números y símbolos.",
+      );
       return;
     }
 
