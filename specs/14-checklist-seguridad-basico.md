@@ -1,6 +1,6 @@
 # SPEC 14 — Checklist de seguridad básico
 
-> **Estado:** Aprobado
+> **Estado:** Implementado
 > **Depende de:** SPEC 04, SPEC 06, SPEC 13
 > **Fecha:** 2026-10-09
 > **Objetivo:** Cerrar los hallazgos de seguridad de `references/security/security-checklist.md` (advisories de Supabase y cabeceras HTTP) mediante una migración que revoca acceso a una función `SECURITY DEFINER` expuesta, headers de seguridad en Next.js, validación de complejidad de contraseña en el formulario de registro, y una lista de pasos manuales a aplicar en el panel de Supabase Auth.
@@ -24,22 +24,24 @@ El warning sobre `scores_insert_publico` (`WITH CHECK (true)`) se documenta como
 - Protección de rutas con Proxy Next.js: https://nextjs.org/docs/app/getting-started/proxy
 
 Ejemplo: proxy.ts
+
 ```ts
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
- 
+import { NextResponse } from "next/server";
+import type { NextRequest } from "next/server";
+
 // This function can be marked `async` if using `await` inside
 export function proxy(request: NextRequest) {
-  return NextResponse.redirect(new URL('/home', request.url))
+  return NextResponse.redirect(new URL("/home", request.url));
 }
- 
+
 // Alternatively, you can use a default export:
 // export default function proxy(request: NextRequest) { ... }
- 
+
 export const config = {
-  matcher: '/about/:path*',
-}
+  matcher: "/about/:path*",
+};
 ```
+
 - Documentar en esta spec, como configuración humana fuera del repo (mismo patrón que el SMTP de SPEC 13), los 3 ajustes de Supabase Auth que no se pueden versionar sin `supabase/config.toml`:
   - **Authentication → Policies → Password Requirements:** mínimo de contraseña a 8 caracteres y la opción "Lowercase, uppercase letters, digits and symbols" (hoy 6 caracteres sin requisito de complejidad, ver SPEC 13).
   - **Authentication → Policies → Leaked password protection:** activarla (bloquea contraseñas filtradas vía HaveIBeenPwned).
